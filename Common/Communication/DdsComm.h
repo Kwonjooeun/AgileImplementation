@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../Common/DdsTypes.h"
 #include "../dds_message/AIEP_AIEP_.hpp"
 #include "../dds_library/dds.h"
 #include <functional>
