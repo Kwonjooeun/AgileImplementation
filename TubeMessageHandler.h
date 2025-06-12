@@ -49,19 +49,4 @@ private:
 
     std::atomic<bool> m_initialized;
     std::atomic<bool> m_shutdown;
-
-    // 주기적 작업 타이밍
-    std::chrono::steady_clock::time_point m_lastEngagementSendTime;
-    std::chrono::steady_clock::time_point m_lastStatusSendTime;
-    std::chrono::steady_clock::time_point m_lastConnectionCheckTime;
-
-    // 주기 설정 (ms)
-    static const int ENGAGEMENT_SEND_INTERVAL = 1000;  // 1초
-    static const int STATUS_SEND_INTERVAL = 1000;      // 1초
-    static const int CONNECTION_CHECK_INTERVAL = 10000; // 10초
-
-    // 통계
-    uint32_t m_messagesReceived;
-    uint32_t m_messagesSent;
-    uint32_t m_messagesFiltered;  // 다른 발사관 메시지
 };
