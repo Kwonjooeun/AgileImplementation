@@ -33,13 +33,13 @@ int main(int argc, char* argv[]) {
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
 
-    std::cout << "Starting LaunchTubeProcess for Tube " << tubeNumber << std::endl;
-
+    DEBUG_STREAM(MAIN) << "Starting LaunchTubeProcess for Tube " << tubeNumber << std::endl;
+    
     try {
         // DDS 통신 초기화
         auto ddsComm = std::make_shared<DdsComm>();
         if (!ddsComm->Initialize()) {
-            std::cerr << "Failed to initialize DDS communication" << std::endl;
+            DEBUG_ERROR_STREAM(MAIN) << "Failed to initialize DDS communication" << std::endl;
             return 1;
         }
 
@@ -47,20 +47,20 @@ int main(int argc, char* argv[]) {
         // 발사관 생성 및 초기화
         g_launchTube = std::make_unique<LaunchTube>(tubeNumber);
         if (!g_launchTube->Initialize()) {
-            std::cerr << "Failed to initialize LaunchTube " << tubeNumber << std::endl;
+            DEBUG_ERROR_STREAM(MAIN) << "Failed to initialize LaunchTube " << tubeNumber << std::endl;
             return 1;
         }
 
         // 메시지 핸들러 생성 및 초기화
         g_messageHandler = std::make_unique<TubeMessageHandler>(tubeNumber, g_launchTube.get(), ddsComm);
         if (!g_messageHandler->Initialize()) {
-            std::cerr << "Failed to initialize TubeMessageHandler" << std::endl;
+            DEBUG_ERROR_STREAM(MAIN) << "Failed to initialize TubeMessageHandler" << std::endl;
             return 1;
         }
 
         ddsComm->Start();
 
-        std::cout << "LaunchTubeProcess " << tubeNumber << " started successfully" << std::endl;
+        DEBUG_STREAM(MAIN) << "LaunchTubeProcess " << tubeNumber << " started successfully" << std::endl;
 
         // 메인 루프
         while (g_running) {
@@ -79,8 +79,8 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        std::cout << "Shutting down LaunchTubeProcess " << tubeNumber << std::endl;
-
+        DEBUG_ERROR_STREAM(MAIN) << "Error in main loop: " << e.what() << std::endl;
+        
         // 정리
         if (g_messageHandler) {
             g_messageHandler->Shutdown();
@@ -96,10 +96,10 @@ int main(int argc, char* argv[]) {
 
     }
     catch (const std::exception& e) {
-        std::cerr << "Fatal error: " << e.what() << std::endl;
+        DEBUG_ERROR_STREAM(MAIN) << "Fatal error: " << e.what() << std::endl;
         return 1;
     }
 
-    std::cout << "LaunchTubeProcess " << tubeNumber << " terminated" << std::endl;
+    DEBUG_STREAM(MAIN) << "LaunchTubeProcess " << tubeNumber << " terminated" << std::endl;
     return 0;
 }
