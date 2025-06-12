@@ -46,19 +46,14 @@ public:
     
     bool CheckInterlockConditions() const override;
     void SetInterlockStatus(bool status) override;
-    void SetEngagementPlanReady(bool ready) override;
-    
-    void Update() override;
-    
-    void SetStateChangeCallback(std::function<void(EN_WPN_CTRL_STATE, EN_WPN_CTRL_STATE)> callback) override;
+
     void SetLaunchStatusCallback(std::function<void(bool)> callback) override;
     
     bool IsReadyToLaunch() const override;
     bool IsLaunching() const override;
     bool IsPostLaunch() const override;
-    
-    std::chrono::steady_clock::time_point GetStateStartTime() const override;
-    std::chrono::milliseconds GetStateDuration() const override;
+
+    std::chrono::milliseconds GetOnStateDuration() const override;
 
 protected:
     // ==========================================================================
@@ -133,7 +128,6 @@ protected:
     /**
      * @brief 콜백 알림
      */
-    void NotifyStateChanged(EN_WPN_CTRL_STATE oldState, EN_WPN_CTRL_STATE newState);
     void NotifyLaunchStatusChanged(bool launched);
 
 private:
@@ -179,7 +173,6 @@ private:
     std::atomic<bool> m_launchInProgress;
     
     // 콜백 관련
-    std::function<void(EN_WPN_CTRL_STATE, EN_WPN_CTRL_STATE)> m_stateChangeCallback;
     std::function<void(bool)> m_launchStatusCallback;
     mutable std::mutex m_callbackMutex;
     
