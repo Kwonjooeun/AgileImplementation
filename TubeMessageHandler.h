@@ -28,20 +28,6 @@ private:
     void OnEditedPlanListReceived(const CMSHCI_AIEP_M_MINE_EDITED_PLAN_LIST& message);
     void OnSelectedPlanReceived(const CMSHCI_AIEP_M_MINE_SELECTED_PLAN& message);
 
-    // DDS 메시지 송신
-    void SendEngagementResult();
-    void SendAssignResponse(const TEWA_ASSIGN_CMD& originalCommand, bool success, const std::string& errorMsg = "");
-    void SendStatusUpdate();
-
-    // 주기적 작업
-    void PeriodicTasks();
-    //void CheckConnectionStatus();
-
-    // 메시지 유효성 검사
-    bool IsMessageForThisTube(int messageTargetTube) const;
-    bool ValidateAssignCommand(const TEWA_ASSIGN_CMD& command) const;
-    bool ValidateControlCommand(const CMSHCI_AIEP_WPN_CTRL_CMD& command) const;
-
     // 멤버 변수
     int m_tubeNumber;
     LaunchTube* m_launchTube;
