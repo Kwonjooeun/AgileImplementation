@@ -17,7 +17,6 @@ public:
     // 초기화 및 종료
     bool Initialize();
     void Shutdown();
-    void Update();
 
 private:
     // 멤버 변수
