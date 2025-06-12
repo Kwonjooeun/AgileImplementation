@@ -12,10 +12,6 @@ TubeMessageHandler::TubeMessageHandler(int tubeNumber, LaunchTube* launchTube, s
     , m_messagesSent(0)
     , m_messagesFiltered(0)
 {
-    auto now = std::chrono::steady_clock::now();
-    m_lastEngagementSendTime = now;
-    m_lastStatusSendTime = now;
-    m_lastConnectionCheckTime = now;
 }
 
 TubeMessageHandler::~TubeMessageHandler() {
@@ -79,14 +75,8 @@ void TubeMessageHandler::Shutdown() {
     std::cout << "Shutting down TubeMessageHandler for Tube " << m_tubeNumber << std::endl;
 
     m_shutdown.store(true);
-
-    // 통계 출력
-    std::cout << "TubeMessageHandler Statistics:" << std::endl;
-    std::cout << "  Messages Received: " << m_messagesReceived << std::endl;
-    std::cout << "  Messages Sent: " << m_messagesSent << std::endl;
-    std::cout << "  Messages Filtered: " << m_messagesFiltered << std::endl;
-
     m_initialized.store(false);
+    
     std::cout << "TubeMessageHandler for Tube " << m_tubeNumber << " shutdown completed" << std::endl;
 }
 
