@@ -92,31 +92,6 @@ public:
     virtual void SetInterlockStatus(bool status) = 0;
     
     /**
-     * @brief 교전계획 준비 상태 설정
-     * @param ready 교전계획 준비 상태
-     */
-    virtual void SetEngagementPlanReady(bool ready) = 0;
-    
-    // ==========================================================================
-    // 주기적 업데이트
-    // ==========================================================================
-    
-    /**
-     * @brief 상태 관리자 업데이트
-     */
-    virtual void Update() = 0;
-    
-    // ==========================================================================
-    // 콜백 등록
-    // ==========================================================================
-    
-    /**
-     * @brief 상태 변경 콜백 등록
-     * @param callback 상태 변경 시 호출될 콜백 함수
-     */
-    virtual void SetStateChangeCallback(std::function<void(EN_WPN_CTRL_STATE, EN_WPN_CTRL_STATE)> callback) = 0;
-    
-    /**
      * @brief 발사 상태 변경 콜백 등록
      * @param callback 발사 상태 변경 시 호출될 콜백 함수
      */
@@ -145,16 +120,10 @@ public:
     virtual bool IsPostLaunch() const = 0;
     
     /**
-     * @brief 상태 시작 시간 반환
-     * @return 현재 상태가 시작된 시간
+     * @brief 무장 켬 이후 경과 시간 반환
+     * @return 무장 켬 이후 경과 시간
      */
-    virtual std::chrono::steady_clock::time_point GetStateStartTime() const = 0;
-    
-    /**
-     * @brief 현재 상태 지속 시간 반환
-     * @return 현재 상태가 시작된 후 경과 시간
-     */
-    virtual std::chrono::milliseconds GetStateDuration() const = 0;
+    virtual std::chrono::milliseconds GetOnStateDuration() const = 0;
 };
 
 } // namespace WeaponControl
