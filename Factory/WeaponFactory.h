@@ -38,9 +38,7 @@ struct WeaponSpecification {
  */
 class WeaponFactory {
 public:
-    // 싱글톤 인스턴스 획득
-    static WeaponFactory& GetInstance();
-    
+   
     // ==========================================================================
     // 객체 생성 메서드들
     // ==========================================================================
@@ -96,13 +94,7 @@ public:
 private:
     WeaponFactory();
     ~WeaponFactory() = default;
-    
-    // 복사 및 이동 금지
-    WeaponFactory(const WeaponFactory&) = delete;
-    WeaponFactory& operator=(const WeaponFactory&) = delete;
-    WeaponFactory(WeaponFactory&&) = delete;
-    WeaponFactory& operator=(WeaponFactory&&) = delete;
-    
+        
     // 기본 생성자들 등록
     void RegisterDefaultCreators();
     
@@ -114,39 +106,4 @@ private:
     // 무장 사양 정보
     std::map<EN_WPN_KIND, WeaponSpecification> m_weaponSpecs;
 };
-
-// =============================================================================
-// 유틸리티 함수들
-// =============================================================================
-
-/**
- * @brief 무장 종류를 문자열로 변환
- */
-inline std::string WeaponKindToString(EN_WPN_KIND kind) {
-    switch(kind) {
-        case EN_WPN_KIND::WPN_KIND_ALM: return "ALM";
-        case EN_WPN_KIND::WPN_KIND_ASM: return "ASM";
-        case EN_WPN_KIND::WPN_KIND_AAM: return "AAM";
-        case EN_WPN_KIND::WPN_KIND_WGT: return "WGT";
-        case EN_WPN_KIND::WPN_KIND_M_MINE: return "MINE";
-        default: return "UNKNOWN";
-    }
-}
-
-/**
- * @brief 무장 상태를 문자열로 변환
- */
-inline std::string StateToString(EN_WPN_CTRL_STATE state) {
-    switch(state) {
-        case EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF: return "OFF";
-        case EN_WPN_CTRL_STATE::WPN_CTRL_STATE_POC: return "POC";
-        case EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON: return "ON";
-        case EN_WPN_CTRL_STATE::WPN_CTRL_STATE_RTL: return "RTL";
-        case EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH: return "LAUNCH";
-        case EN_WPN_CTRL_STATE::WPN_CTRL_STATE_POST_LAUNCH: return "POST_LAUNCH";
-        case EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT: return "ABORT";
-        default: return "UNKNOWN";
-    }
-}
-
 } // namespace WeaponControl
