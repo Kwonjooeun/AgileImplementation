@@ -1,112 +1,130 @@
-#pragma once
-
-#include <map>
 #include <string>
-#include <memory>
 #include <mutex>
-#include <fstream>
-#include <sstream>
-#include <filesystem>
 
-namespace WeaponControl {
+namespace MINEASMALM {
 
-/**
- * @brief 설정 관리자 (싱글톤)
- * 
- * INI 파일 형식의 설정 파일을 읽고 쓰는 기능을 제공합니다.
- */
-class ConfigManager {
-public:
-    // 싱글톤 인스턴스 획득
-    static ConfigManager& GetInstance();
-    
-    // ==========================================================================
-    // 설정 파일 로드/저장
-    // ==========================================================================
-    
     /**
-     * @brief 설정 파일 로드
-     * @param filename 설정 파일 경로
-     * @return 성공 여부
+     * @brief 시스템 인프라 설정 (main에서 주로 사용)
      */
-    bool LoadFromFile(const std::string& filename);
-    
-    /**
-     * @brief 설정 파일 저장
-     * @param filename 설정 파일 경로
-     * @return 성공 여부
-     */
-    bool SaveToFile(const std::string& filename) const;
-    
-    /**
-     * @brief 기본 설정 파일들 로드
-     * @return 성공 여부
-     */
-    bool LoadConfigs();
-    
-    // ==========================================================================
-    // 설정값 읽기 (타입별)
-    // ==========================================================================
-    
-    std::string GetString(const std::string& key, const std::string& defaultValue = "") const;
-    int GetInt(const std::string& key, int defaultValue = 0) const;
-    float GetFloat(const std::string& key, float defaultValue = 0.0f) const;
-    double GetDouble(const std::string& key, double defaultValue = 0.0) const;
-    bool GetBool(const std::string& key, bool defaultValue = false) const;
-    
-    // ==========================================================================
-    // 설정값 쓰기
-    // ==========================================================================
-    
-    void SetString(const std::string& key, const std::string& value);
-    void SetInt(const std::string& key, int value);
-    void SetFloat(const std::string& key, float value);
-    void SetDouble(const std::string& key, double value);
-    void SetBool(const std::string& key, bool value);
-    
-    // ==========================================================================
-    // 유틸리티
-    // ==========================================================================
-    
-    /**
-     * @brief 설정이 로드되었는지 확인
-     */
-    bool IsLoaded() const { return m_loaded; }
-    
-    /**
-     * @brief 모든 설정 출력 (디버그용)
-     */
-    void PrintAllSettings() const;
-    
-    /**
-     * @brief 설정 초기화
-     */
-    void Clear();
+    struct SystemInfraConfig {
+        int totalTubes;                     // 전체 발사관 개수        
+        int ddsDomainId;                    // DDS 설정
 
-private:
-    ConfigManager() : m_loaded(false) {}
-    ~ConfigManager() = default;
-    
-    // 복사 및 이동 금지
-    ConfigManager(const ConfigManager&) = delete;
-    ConfigManager& operator=(const ConfigManager&) = delete;
-    ConfigManager(ConfigManager&&) = delete;
-    ConfigManager& operator=(ConfigManager&&) = delete;
-    
-    // ==========================================================================
-    // 헬퍼 함수들
-    // ==========================================================================
-    
-    std::string Trim(const std::string& str) const;
-    void CreateDefaultConfig();
-    
-    // ==========================================================================
-    // 멤버 변수
-    // ==========================================================================
-    
-    std::map<std::string, std::string> m_config;
-    mutable std::mutex m_configMutex;
-    bool m_loaded;
-};
+        SystemInfraConfig()
+            : totalTubes(6)
+            , ddsDomainId(83)        {}
+    };
 
-} // namespace WeaponControl
+    /**
+     * @brief 비즈니스 로직 설정 (Factory에서 객체 생성 시 사용)
+     */
+    struct BusinessLogicConfig {
+        // 업데이트 주기들
+        double engagementPlanUpdateInterval_sec;     // 교전계획 업데이트 주기
+        double weaponStatusUpdateInterval_sec;       // 무장상태 업데이트 주기
+
+        BusinessLogicConfig()
+            : engagementPlanUpdateInterval_sec(1.0)
+            , weaponStatusUpdateInterval_sec(1.0)        {}
+    };
+
+    /**
+     * @brief 무장 제원 정보
+     */
+    struct WeaponSpecification {
+        std::string name;
+        double maxRange_km;
+        double maxSpeed_mps;
+        double cruiseSpeed_mps;
+        double launchDelay_sec;
+        double maxDepth_m;
+        double maxAltitude_m;
+        int maxWaypoints;
+        bool requiresWaypoints;
+        std::string description;
+
+        WeaponSpecification()
+            : name("Unknown"), maxRange_km(0.0), maxSpeed_mps(0.0), cruiseSpeed_mps(0.0)
+            , launchDelay_sec(0.0), maxDepth_m(0.0), maxAltitude_m(0.0)
+            , maxWaypoints(0), requiresWaypoints(false), description("") {}
+    };
+
+    /**
+     * @brief 통합 설정 관리자 (실용적 접근법)
+     *
+     * 하나의 설정 파일에서 모든 설정을 로드하되,
+     * 용도별로 구조화하여 제공합니다.
+     */
+    class ConfigManager {
+    public:
+        static ConfigManager& GetInstance();
+
+        /**
+         * @brief 설정 파일 로드
+         */
+        bool LoadFromFile(const std::string& configFilePath = "config.ini");
+
+        /**
+         * @brief 시스템 인프라 설정 조회 (main에서 사용)
+         */
+        const SystemInfraConfig& GetSystemInfraConfig() const;
+
+        /**
+         * @brief 비즈니스 로직 설정 조회 (Factory에서 사용)
+         */
+        const BusinessLogicConfig& GetBusinessLogicConfig() const;
+
+        /**
+         * @brief 무장 제원 조회 (Factory에서 사용)
+         */
+        const WeaponSpecification& GetWeaponSpec(EN_WPN_KIND weaponKind) const;
+
+        /**
+         * @brief 지원되는 무장 종류 목록
+         */
+        std::vector<EN_WPN_KIND> GetSupportedWeaponKinds() const;
+
+        /**
+         * @brief 무장 지원 여부 확인
+         */
+        bool IsWeaponSupported(EN_WPN_KIND weaponKind) const;
+
+        /**
+         * @brief 무장 이름 조회
+         */
+        std::string GetWeaponName(EN_WPN_KIND weaponKind) const;
+
+        /**
+         * @brief 설정 로드 여부 확인
+         */
+        bool IsLoaded() const { return m_loaded; }
+
+        /**
+         * @brief 설정 정보 출력
+         */
+        void PrintAllConfigs() const;
+
+    private:
+        ConfigManager() = default;
+        ~ConfigManager() = default;
+
+        ConfigManager(const ConfigManager&) = delete;
+        ConfigManager& operator=(const ConfigManager&) = delete;
+
+        void LoadSystemInfraConfig(const ConfigReader& config);
+        void LoadBusinessLogicConfig(const ConfigReader& config);
+        void LoadWeaponSpecs(const ConfigReader& config);
+
+        std::string WeaponKindToString(EN_WPN_KIND kind) const;
+        EN_WPN_KIND StringToWeaponKind(const std::string& str) const;
+
+        SystemInfraConfig m_systemInfraConfig;
+        BusinessLogicConfig m_businessLogicConfig;
+        std::map<EN_WPN_KIND, WeaponSpecification> m_weaponSpecs;
+
+        mutable std::mutex m_mutex;
+        bool m_loaded = false;
+
+        static const WeaponSpecification s_defaultWeaponSpec;
+    };
+} // namespace MINEASMALM
