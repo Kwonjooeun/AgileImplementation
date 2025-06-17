@@ -20,20 +20,22 @@
 #define ENABLE_MAIN_DEBUG                    1
 #define ENABLE_LAUNCHTUBEMANAGER_DEBUG       1
 #define ENABLE_MESSAGERECEIVER_DEBUG         1
-#define ENABLE_WEAPONFACTORY_DEBUG           0
+#define ENABLE_WEAPONFACTORY_DEBUG           1
 #define ENABLE_WEAPONSTATE_DEBUG             1
 #define ENABLE_ENGAGEMENT_DEBUG              1
 #define ENABLE_DDSCOMM_DEBUG                 1
-#define ENABLE_MINEMANAGER_DEBUG             0
+#define ENABLE_MINEMANAGER_DEBUG             1
+#define ENABLE_CONFIGMANAGER_DEBUG           1
 #else
-#define ENABLE_MAIN_DEBUG           0
-#define ENABLE_LAUNCHTUBE_DEBUG     0
-#define ENABLE_MESSAGEHANDLER_DEBUG 0
-#define ENABLE_WEAPONFACTORY_DEBUG  0
-#define ENABLE_WEAPONSTATE_DEBUG    0
-#define ENABLE_ENGAGEMENT_DEBUG     0
-#define ENABLE_DDSCOMM_DEBUG        0
-#define ENABLE_MINEMANAGER_DEBUG    0
+#define ENABLE_MAIN_DEBUG                    0
+#define ENABLE_LAUNCHTUBEMANAGER_DEBUG       0
+#define ENABLE_MESSAGERECEIVER_DEBUG         0
+#define ENABLE_WEAPONFACTORY_DEBUG           0
+#define ENABLE_WEAPONSTATE_DEBUG             0
+#define ENABLE_ENGAGEMENT_DEBUG              0
+#define ENABLE_DDSCOMM_DEBUG                 0
+#define ENABLE_MINEMANAGER_DEBUG             0
+#define ENABLE_CONFIGMANAGER_DEBUG           0
 #endif
 
 class DebugLogger {
