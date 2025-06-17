@@ -19,3 +19,6 @@ void DdsComm::RegisterWriters() {
     dds.RegisterWriter<AIEP_AI_INFER_RESULT_WP>();
     dds.RegisterWriter<AIEP_INTERNAL_INFER_REQ>();
 }
+DdsComm::~DdsComm() {
+
+}
