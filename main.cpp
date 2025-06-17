@@ -4,35 +4,41 @@
 #include <chrono>
 #include <signal.h>
 
-//#include "Common/Utils/DebugPrint.h"
+#include "Common/Utils/DebugPrint.h"
+#include "Common/Utils/ConfigManager.h"
 #include "Common/Communication/DdsComm.h"
 #include "LaunchTubeManager.h"
 #include "TubeMessageReceiver.h"
 
 static std::unique_ptr<MINEASMALM::LaunchTubeManager> g_launchTubemanager = nullptr;
 static std::unique_ptr<MINEASMALM::TubeMessageReceiver> g_messagereceiver = nullptr;
-static bool g_running = true;
+static std::atomic<bool> g_running(true);
 
 void signalHandler(int signal) {
+#ifdef CONSOLMESSAGE
     std::cout << "Signal " << signal << " received, shutting down..." << std::endl;
+#endif
     g_running = false;
 }
 //int argc, char* argv[]
 int main() {
+    // 1. 전체 설정 로드 (한 번만)
+    auto& config = MINEASMALM::ConfigManager::GetInstance();
+    if (!config.LoadFromFile("config.ini")) {
+        return 1;
+    }
 
+    // 2. main에서는 시스템 인프라 설정만 관심
+    const auto& sysInfra = config.GetSystemInfraConfig();
+
+    // 디버깅용 임시 선언
     int tubeNumber = 1; //std::atoi(argv[1]);
+    DebugLogger::Initialize(tubeNumber);
 
-    DebugLogger::Initialize(tubeNumber, "Hello");
-
-    //if (argc != 2) {
-    //    std::cerr << "Usage: LaunchTubeProcess.exe <tube_number>" << std::endl;
-    //    std::cerr << "Example: LaunchTubeProcess.exe 1" << std::endl;
-    //    return 1;
-    //}
-
-
-    if (tubeNumber < 1 || tubeNumber > 6) {
+    if (tubeNumber < 1 || tubeNumber > sysInfra.totalTubes) {
+#ifdef CONSOLMESSAGE
         std::cerr << "Tube number must be between 1 and 6" << std::endl;
+#endif
         return 1;
     }
 
@@ -40,7 +46,7 @@ int main() {
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
 
-    //DEBUG_STREAM(MAIN) << "Starting LaunchTubeProcess for Tube " << tubeNumber << std::endl;
+    DEBUG_STREAM(MAIN) << "Starting LaunchTubeProcess for Tube # " << tubeNumber << std::endl;
 #ifdef CONSOLMESSAGE
     std::cout << "Starting LaunchTubeProcess for Tube " << tubeNumber << std::endl;
 #endif // CONSOLMESSAGE
@@ -50,7 +56,6 @@ int main() {
         auto ddsComm = std::make_shared<DdsComm>();
         if (!ddsComm->Initialize()) { // 송신용 메시지 등록
             DEBUG_ERROR_STREAM(MAIN) << "Failed to initialize DDS communication" << std::endl;
-            //std::cerr << "Failed to initialize DDS communication" << std::endl;
             return 1;
         }
 
@@ -69,6 +74,12 @@ int main() {
         }
 
         ddsComm->Start();
+
+        while (g_running.load())
+        {
+            // main 함수 종료 안되게 하는 loop
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
     }
     catch (const std::exception& e) {
         DEBUG_ERROR_STREAM(MAIN) << "Fatal error: " << e.what() << std::endl;
