@@ -89,7 +89,7 @@ namespace MINEASMALM {
 
     bool LaunchTubeManager::UnassignWeapon() {
         std::lock_guard<std::mutex> lock(m_mutex);
-
+        // TODO. Unassign 로직 추가
         if (!m_isAssigned) {
             return true;
         }
