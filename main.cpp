@@ -36,10 +36,6 @@ int main() {
         return 1;
     }
 
-    // 신호 핸들러 등록
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
-
     DEBUG_STREAM(MAIN) << "Starting LaunchTubeProcess for Tube # " << tubeNumber << std::endl;
 #ifdef CONSOLMESSAGE
     std::cout << "Starting LaunchTubeProcess for Tube " << tubeNumber << std::endl;
