@@ -14,12 +14,6 @@ static std::unique_ptr<MINEASMALM::LaunchTubeManager> g_launchTubemanager = null
 static std::unique_ptr<MINEASMALM::TubeMessageReceiver> g_messagereceiver = nullptr;
 static std::atomic<bool> g_running(true);
 
-void signalHandler(int signal) {
-#ifdef CONSOLMESSAGE
-    std::cout << "Signal " << signal << " received, shutting down..." << std::endl;
-#endif
-    g_running = false;
-}
 //int argc, char* argv[]
 int main() {
     // 1. 전체 설정 로드 (한 번만)
@@ -80,6 +74,22 @@ int main() {
             // main 함수 종료 안되게 하는 loop
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
+                DEBUG_STREAM(MAIN) << "Shutting down systems..." << std::endl;
+
+        // 정리 작업
+        if (g_messagereceiver) {
+            g_messagereceiver->Shutdown();
+            g_messagereceiver.reset();
+        }
+
+        if (g_launchTubemanager) {
+            g_launchTubemanager->Shutdown();
+            g_launchTubemanager.reset();
+        }
+
+        ddsComm->Stop();
+        DEBUG_STREAM(MAIN) << "Shutdown completed for Tube " << tubeNumber << std::endl;
+        DebugLogger::Shutdown();
     }
     catch (const std::exception& e) {
         DEBUG_ERROR_STREAM(MAIN) << "Fatal error: " << e.what() << std::endl;
