@@ -74,11 +74,6 @@ namespace MINEASMALM {
             return false;
         }
 
-        // 명령 대상 발사관 확인
-        if (static_cast<int>(command.eTubeNum()) != m_tubeNumber) {
-            return false; // 다른 발사관용 명령
-        }
-
         // 무장 종류 확인
         if (static_cast<EN_WPN_KIND>(command.eWpnKind()) != m_weaponKind) {
             DEBUG_ERROR_STREAM(WEAPONSTATE) << "Weapon kind mismatch. Expected: " 
