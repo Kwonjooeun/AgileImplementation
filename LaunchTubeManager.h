@@ -1,6 +1,7 @@
 #pragma once
 #include "Common/Utils/DebugPrint.h"
 #include "EngagementPlanningFactory/EngagementPlanningFactory.h"
+#include "WpnStatusCtrl/WpnStatusCtrlManager.h"
 #include "dds_message/AIEP_AIEP_.hpp"
 #include <memory>
 #include <mutex>
@@ -28,6 +29,9 @@ namespace MINEASMALM {
 		bool AssignWeapon(const TEWA_ASSIGN_CMD& assignCmd);
 		bool UnassignWeapon();
 
+		// 무장 상태 통제
+		bool ProcessWeaponControlCommand(const CMSHCI_AIEP_WPN_CTRL_CMD& command);
+
 	private:
 		// 멤버 변수
 		int m_tubeNumber;
@@ -40,6 +44,9 @@ namespace MINEASMALM {
 		TEWA_ASSIGN_CMD m_assignmentInfo;
 		bool m_isAssigned;
 		EN_WPN_KIND m_weaponKind;
+
+		// 무장 상태 통제 관리자
+		std::unique_ptr<WpnStatusCtrlManager> m_wpnStatusCtrlManager;
 
 		// 환경 정보
 		NAVINF_SHIP_NAVIGATION_INFO m_ownShipInfo;
