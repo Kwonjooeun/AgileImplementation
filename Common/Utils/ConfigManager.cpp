@@ -47,10 +47,10 @@ namespace MINEASMALM
 
     void ConfigManager::LoadSystemInfraConfig(const ConfigReader& config) {
         // 시스템 인프라 설정 로드
-        m_systemInfraConfig.totalTubes = config.GetInt("SystemInfra", "TotalTubes", 6);
+        m_systemInfraConfig.totalTubes = config.GetInt("System", "TotalTubes", 6);
 
         // DDS 설정
-        m_systemInfraConfig.ddsDomainId = config.GetInt("SystemInfra", "DDSDomainId", 83);
+        m_systemInfraConfig.ddsDomainId = config.GetInt("Network", "DDSDomainId", 83);
     }
 
     void ConfigManager::LoadBusinessLogicConfig(const ConfigReader& config) {
