@@ -27,7 +27,7 @@ namespace MINEASMALM {
 		// DDS 메시지 수신 콜백들
 		void OnLoadInfoReceived(const TEWA_WA_TUBE_LOAD_INFO& message);
 		void OnAssignCommandReceived(const TEWA_ASSIGN_CMD& message);
-		//void OnWeaponControlCommandReceived(const CMSHCI_AIEP_WPN_CTRL_CMD& message);
+		void OnWeaponControlCommandReceived(const CMSHCI_AIEP_WPN_CTRL_CMD& message);
 		//void OnWaypointsReceived(const CMSHCI_AIEP_WPN_GEO_WAYPOINTS& message);
 		//void OnOwnShipInfoReceived(const NAVINF_SHIP_NAVIGATION_INFO& message);
 		//void OnTargetInfoReceived(const TRKMGR_SYSTEMTARGET_INFO& message);
