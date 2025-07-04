@@ -16,11 +16,10 @@ namespace MINEASMALM {
     // =============================================================================
     class WpnStatusCtrlManager {
     public:
-        WpnStatusCtrlManager();
+        WpnStatusCtrlManager(int tubeNumber, EN_WPN_KIND weaponKind, std::shared_ptr<DdsComm> ddsComm);
         ~WpnStatusCtrlManager();
 
-        // 초기화 및 종료
-        bool Initialize(int tubeNumber, EN_WPN_KIND weaponKind);
+        // 종료
         void Shutdown();
 
         // 무장 상태 통제
@@ -28,6 +27,8 @@ namespace MINEASMALM {
         EN_WPN_CTRL_STATE GetCurrentState() const;
 
     private:
+        std::shared_ptr<DdsComm> m_ddsComm;
+
         // 상태 전이 규칙 (문서에서 제공된 규칙)
         static const std::map<EN_WPN_CTRL_STATE, std::set<EN_WPN_CTRL_STATE>> s_validTransitions;
 
