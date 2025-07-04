@@ -36,8 +36,8 @@ namespace MINEASMALM {
             m_ddsComm->RegisterReader<TEWA_ASSIGN_CMD>(
                 [this](const TEWA_ASSIGN_CMD& msg) { OnAssignCommandReceived(msg); });
 
-            //m_ddsComm->RegisterReader<CMSHCI_AIEP_WPN_CTRL_CMD>(
-            //    [this](const CMSHCI_AIEP_WPN_CTRL_CMD& msg) { OnWeaponControlCommandReceived(msg); });
+            m_ddsComm->RegisterReader<CMSHCI_AIEP_WPN_CTRL_CMD>(
+                [this](const CMSHCI_AIEP_WPN_CTRL_CMD& msg) { OnWeaponControlCommandReceived(msg); });
 
             //m_ddsComm->RegisterReader<CMSHCI_AIEP_WPN_GEO_WAYPOINTS>(
             //    [this](const CMSHCI_AIEP_WPN_GEO_WAYPOINTS& msg) { OnWaypointsReceived(msg); });
@@ -157,5 +157,15 @@ namespace MINEASMALM {
         catch (const std::exception& e) {
             DEBUG_ERROR_STREAM(MESSAGERECEIVER) << e.what() << std::endl;
         }
+    }
+
+    void TubeMessageReceiver::OnWeaponControlCommandReceived(const CMSHCI_AIEP_WPN_CTRL_CMD& message)
+    {
+        int targetTube = static_cast<int>(message.eTubeNum());
+
+        if (!IsMessageForThisTube(targetTube)) {
+            return;
+        }
+        m_launchtubemanager->ProcessWeaponControlCommand(message);
     }
 } // namespace MINEASMALM
