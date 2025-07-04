@@ -61,9 +61,27 @@ namespace MINEASMALM {
         DEBUG_STREAM(LAUNCHTUBEMANAGER) << "LaunchTubeManager " << m_tubeNumber << " shutdown completed" << std::endl;
     }
 
+    void LaunchTubeManager::UpdateLoadedWeaponKind(EN_WPN_KIND weaponKind) {
+        m_loadedWeaponKind.store(static_cast<uint32_t>(weaponKind));
+    }
+
+    bool LaunchTubeManager::CanAssignWeapon(const TEWA_ASSIGN_CMD& assignCmd) const {
+        uint32_t loadedKind = m_loadedWeaponKind.load();
+        uint32_t requestedKind = assignCmd.stWpnAssign().enWeaponType();
+
+        return (loadedKind != static_cast<uint32_t>(EN_WPN_KIND::WPN_KIND_NA)) &&
+            (loadedKind == requestedKind);
+    }
+
     bool LaunchTubeManager::AssignWeapon(const TEWA_ASSIGN_CMD& assignCmd) {
         std::lock_guard<std::mutex> lock(m_mutex);
-
+        
+        // 적재 정보와 일치하는 할당 명령인지 확인
+        if (!CanAssignWeapon(assignCmd))
+        {
+            return false;
+        }
+        
         if (m_isAssigned) {
             DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "LaunchTube " << m_tubeNumber << " already has weapon assigned" << std::endl;
             return false;
