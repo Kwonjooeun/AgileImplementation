@@ -18,6 +18,12 @@ namespace MINEASMALM {
 		bool Initialize();
 		void Shutdown();
 
+		// 적재정보 업데이트
+		void UpdateLoadedWeaponKind(EN_WPN_KIND weaponKind);
+
+		// 할당 가능 여부 확인
+		bool CanAssignWeapon(const TEWA_ASSIGN_CMD& assignCmd) const;
+
 		// 무장 할당 관리
 		bool AssignWeapon(const TEWA_ASSIGN_CMD& assignCmd);
 		bool UnassignWeapon();
@@ -26,6 +32,9 @@ namespace MINEASMALM {
 		// 멤버 변수
 		int m_tubeNumber;
 		std::atomic<bool> m_initialized;
+
+		// 적재된 무장 종류만 저장 (원자적 연산)
+		std::atomic<uint32_t> m_loadedWeaponKind{ static_cast<uint32_t>(EN_WPN_KIND::WPN_KIND_NA) };
 
 		// 할당 정보
 		TEWA_ASSIGN_CMD m_assignmentInfo;
