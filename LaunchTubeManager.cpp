@@ -6,6 +6,7 @@ namespace MINEASMALM {
         , m_initialized(false)
         , m_isAssigned(false)
         , m_weaponKind(EN_WPN_KIND::WPN_KIND_NA)
+        , m_wpnStatusCtrlManager(nullptr)
         , m_shutdown(false)
     {
         // 할당 정보 초기화
@@ -56,7 +57,13 @@ namespace MINEASMALM {
         if (m_isAssigned) {
             UnassignWeapon();
         }
-
+        
+        // 무장 상태 통제 관리자 종료
+        if (m_wpnStatusCtrlManager) {
+            m_wpnStatusCtrlManager->Shutdown();
+            m_wpnStatusCtrlManager.reset();
+        }
+        
         m_initialized.store(false);
         DEBUG_STREAM(LAUNCHTUBEMANAGER) << "LaunchTubeManager " << m_tubeNumber << " shutdown completed" << std::endl;
     }
@@ -82,10 +89,11 @@ namespace MINEASMALM {
             return false;
         }
         
-        if (m_isAssigned) {
-            DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "LaunchTube " << m_tubeNumber << " already has weapon assigned" << std::endl;
-            return false;
-        }
+        //// TODO 무장 할당 후에도 할당 정보를 변경할 수 있어야 함. (예를 들어 표적이나 명중지점)
+        //if (m_isAssigned) {
+        //    DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "LaunchTube " << m_tubeNumber << " already has weapon assigned" << std::endl;
+        //    return false;
+        //}
 
         try {
             m_assignmentInfo = assignCmd;
@@ -93,7 +101,21 @@ namespace MINEASMALM {
 
             DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Assigning weapon " << static_cast<int>(m_weaponKind)
                 << " to LaunchTube " << m_tubeNumber << std::endl;
+            
+            // 무장 상태 통제 관리자 생성
+            m_wpnStatusCtrlManager = std::make_unique<WpnStatusCtrlManager>();
+            if (!m_wpnStatusCtrlManager) {
+                DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Failed to create WpnStatusCtrlManager" << std::endl;
+                return false;
+            }
 
+            // 무장 상태 통제 관리자 초기화
+            if (!m_wpnStatusCtrlManager->Initialize(m_tubeNumber, m_weaponKind)) {
+                DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Failed to initialize WpnStatusCtrlManager" << std::endl;
+                m_wpnStatusCtrlManager.reset();
+                return false;
+            }
+            
             // WeaponFactory를 통해 무장 관련 객체들 생성
 
             m_isAssigned = true;
@@ -113,7 +135,7 @@ namespace MINEASMALM {
         }
 
         //try {
-        //     무장 상태를 OFF로 변경 (WeaponStatusCtrlManager 사용)
+        //     무장 상태 OFF인지 확인 후 OFF 일 경우만 무장 해제 가능
 
         //    DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Unassigning weapon from LaunchTube " << m_tubeNumber << std::endl;
         //    return true;
@@ -123,5 +145,17 @@ namespace MINEASMALM {
         //    return false;
         //}
     }
-    
+
+    bool LaunchTubeManager::ProcessWeaponControlCommand(const CMSHCI_AIEP_WPN_CTRL_CMD& command) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        if (!m_isAssigned || !m_wpnStatusCtrlManager) {
+            DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "No weapon assigned to process control command" << std::endl;
+            return false;
+        }
+
+        DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Processing weapon control command for Tube " << m_tubeNumber << std::endl;
+
+        return m_wpnStatusCtrlManager->ProcessControlCommand(command);
+    }
 } // namespace MINEASMALM
