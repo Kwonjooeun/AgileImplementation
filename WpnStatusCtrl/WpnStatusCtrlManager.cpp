@@ -14,37 +14,28 @@ namespace MINEASMALM {
         {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_POST_LAUNCH, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}}
     };
 
-    WpnStatusCtrlManager::WpnStatusCtrlManager()
-        : m_tubeNumber(0)
-        , m_weaponKind(EN_WPN_KIND::WPN_KIND_NA)
+    WpnStatusCtrlManager::WpnStatusCtrlManager(int tubeNumber, EN_WPN_KIND weaponKind, std::shared_ptr<DdsComm> ddsComm)
+        : m_tubeNumber(tubeNumber)
+        , m_weaponKind(weaponKind)
+        , m_ddsComm(ddsComm)
         , m_currentState(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF)
         , m_initialized(false)
         , m_shutdown(false)
         , m_launchInProgress(false)
-    {}
+    {
+        if (!ddsComm) {
+            throw std::invalid_argument("DdsComm cannot be null");
+        }
+    
+        m_shutdown.store(false);
+        m_initialized.store(true);
+    
+        DEBUG_STREAM(WEAPONSTATE) << "WpnStatusCtrlManager initialized for Tube " << m_tubeNumber 
+                                  << ", Weapon Kind: " << static_cast<int>(m_weaponKind) << std::endl;
+    }
 
     WpnStatusCtrlManager::~WpnStatusCtrlManager() {
         Shutdown();
-    }
-
-    bool WpnStatusCtrlManager::Initialize(int tubeNumber, EN_WPN_KIND weaponKind) {
-        std::lock_guard<std::mutex> lock(m_stateMutex);
-
-        if (m_initialized.load()) {
-            return true;
-        }
-
-        m_tubeNumber = tubeNumber;
-        m_weaponKind = weaponKind;
-        m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF);
-        m_shutdown.store(false);
-        m_launchInProgress.store(false);
-        m_initialized.store(true);
-
-        DEBUG_STREAM(WEAPONSTATE) << "WpnStatusCtrlManager initialized for Tube " << m_tubeNumber 
-                                  << ", Weapon Kind: " << static_cast<int>(m_weaponKind) << std::endl;
-
-        return true;
     }
 
     void WpnStatusCtrlManager::Shutdown() {
