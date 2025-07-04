@@ -50,7 +50,7 @@ int main() {
         }
 
         // 발사관 생성 및 초기화
-        g_launchTubemanager = std::make_unique<MINEASMALM::LaunchTubeManager>(tubeNumber);
+        g_launchTubemanager = std::make_unique<MINEASMALM::LaunchTubeManager>(tubeNumber, ddsComm);
         if (!g_launchTubemanager->Initialize()) {
             DEBUG_ERROR_STREAM(MAIN) << "Failed to initialize LaunchTubeManager " << tubeNumber << std::endl;
             return 1;
