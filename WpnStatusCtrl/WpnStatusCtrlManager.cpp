@@ -147,7 +147,17 @@ namespace MINEASMALM {
             }
             m_currentState.store(targetState);
         }
-
+        
+        if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON) 
+        {
+            m_weaponOnTime = std::chrono::steady_clock::now();
+            m_isWeaponOn.store(true);
+        }
+        else if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF) 
+        {
+            m_isWeaponOn.store(false);
+        }
+        
         // 발사 명령인 경우 발사 절차 시작
         if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH) {
             if (m_launchInProgress.exchange(true)) {
@@ -211,6 +221,36 @@ namespace MINEASMALM {
             DEBUG_ERROR_STREAM(WEAPONSTATE) << "Exception in launch sequence: " << e.what() << std::endl;
             m_launchInProgress.store(false);
             m_abortRequested.store(false);
+        }
+    }
+
+    void WpnStatusCtrlManager::SendWeaponStatus() {
+        if (!m_ddsComm || m_shutdown.load()) {
+            return;
+        }
+    
+        try {
+            AIEP_WPN_CTRL_STATUS_INFO statusMsg;
+            
+            statusMsg.eTubeNum() = static_cast<uint32_t>(m_tubeNumber);
+            statusMsg.eCtrlState() = static_cast<uint32_t>(m_currentState.load());
+            
+            // 무장 켠 후 경과시간 계산
+            if (m_isWeaponOn.load()) {
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - m_weaponOnTime);
+                statusMsg.wpnTime() = static_cast<uint32_t>(elapsed.count());
+            } else {
+                statusMsg.wpnTime() = 0;
+            }
+            
+            m_ddsComm->Send(statusMsg);
+            
+            DEBUG_STREAM(WEAPONSTATE) << "Weapon status sent for Tube " << m_tubeNumber 
+                                      << ", State: " << static_cast<int>(m_currentState.load()) << std::endl;
+        }
+        catch (const std::exception& e) {
+            DEBUG_ERROR_STREAM(WEAPONSTATE) << "Failed to send weapon status: " << e.what() << std::endl;
         }
     }
 } // namespace MINEASMALM
