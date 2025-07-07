@@ -115,12 +115,6 @@ namespace MINEASMALM {
 
         try {
             if (message.eSetCmd() == static_cast<uint32_t>(EN_SET_CMD::SET_CMD_SET)) {
-                // 할당 전에 적재정보 검증
-                if (!m_launchtubemanager->CanAssignWeapon(message)) {
-                    DEBUG_ERROR_STREAM(MESSAGERECEIVER) << "Cannot assign weapon - weapon type mismatch or no weapon loaded" << std::endl;
-                    return;
-                }
-                
                 success = m_launchtubemanager->AssignWeapon(message);
                 if (success) {
                     AIEP_ASSIGN_RESP RespMsg;
