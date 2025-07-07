@@ -28,6 +28,7 @@ namespace MINEASMALM {
         }
     
         m_shutdown.store(false);
+        m_launchInProgress.store(false);
         m_initialized.store(true);
     
         DEBUG_STREAM(WEAPONSTATE) << "WpnStatusCtrlManager initialized for Tube " << m_tubeNumber 
@@ -39,8 +40,6 @@ namespace MINEASMALM {
     }
 
     void WpnStatusCtrlManager::Shutdown() {
-        std::lock_guard<std::mutex> lock(m_stateMutex);
-
         if (!m_initialized.load()) {
             return;
         }
@@ -48,15 +47,36 @@ namespace MINEASMALM {
         DEBUG_STREAM(WEAPONSTATE) << "WpnStatusCtrlManager shutdown for Tube " << m_tubeNumber << std::endl;
 
         m_shutdown.store(true);
+        m_abortRequested.store(true);
 
-        // 발사 스레드가 실행 중이면 대기
-        if (m_launchThread.joinable()) {
-            m_launchThread.join();
+        int waitCount{ 0 };
+
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF);
         }
 
-        m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF);
         m_launchInProgress.store(false);
         m_initialized.store(false);
+    }
+
+    void WpnStatusCtrlManager::WorkerLoop()
+    {
+        auto lastStatusSend = std::chrono::steady_clock::now();
+
+        DEBUG_STREAM(WEAPONSTATE) << "WorkerLoop started for Tube " << m_tubeNumber << std::endl;
+
+        while (!m_shutdown.load()) {
+            auto now = std::chrono::steady_clock::now();
+
+            // 1초마다 상태 송신 (mutex로 상태 보호)
+            if (now - lastStatusSend >= std::chrono::seconds(1)) {
+                SendWeaponStatus();
+                lastStatusSend = now;
+            }
+        }
+
+        DEBUG_STREAM(WEAPONSTATE) << "WorkerLoop ended for Tube " << m_tubeNumber << std::endl;
     }
 
     bool WpnStatusCtrlManager::ProcessControlCommand(const CMSHCI_AIEP_WPN_CTRL_CMD& command) {
@@ -67,19 +87,18 @@ namespace MINEASMALM {
 
         // 무장 종류 확인
         if (static_cast<EN_WPN_KIND>(command.eWpnKind()) != m_weaponKind) {
-            DEBUG_ERROR_STREAM(WEAPONSTATE) << "Weapon kind mismatch. Expected: " 
-                                            << static_cast<int>(m_weaponKind) 
-                                            << ", Received: " << command.eWpnKind() << std::endl;
+            DEBUG_ERROR_STREAM(WEAPONSTATE) << "Weapon kind mismatch. Expected: "
+                << static_cast<int>(m_weaponKind)
+                << ", Received: " << command.eWpnKind() << std::endl;
             return false;
         }
 
-        EN_WPN_CTRL_STATE targetState = static_cast<EN_WPN_CTRL_STATE>(command.eWpnCtrlCmd());
+        // 별도 스레드에서 상태 전이 처리
+        std::thread([this, command]() {
+            ProcessControlCommandInternal(command);
+            }).detach();
 
-        DEBUG_STREAM(WEAPONSTATE) << "Processing control command for Tube " << m_tubeNumber 
-                                  << ": " << static_cast<int>(m_currentState.load()) 
-                                  << " -> " << static_cast<int>(targetState) << std::endl;
-
-        return TransitionState(targetState);
+        return true;
     }
 
     EN_WPN_CTRL_STATE WpnStatusCtrlManager::GetCurrentState() const {
@@ -95,57 +114,50 @@ namespace MINEASMALM {
         return it->second.find(toState) != it->second.end();
     }
 
-    bool WpnStatusCtrlManager::TransitionState(EN_WPN_CTRL_STATE targetState) {
-        std::lock_guard<std::mutex> lock(m_stateMutex);
+    void WpnStatusCtrlManager::ProcessControlCommandInternal(const CMSHCI_AIEP_WPN_CTRL_CMD& command) 
+    {
+        EN_WPN_CTRL_STATE targetState = static_cast<EN_WPN_CTRL_STATE>(command.eWpnCtrlCmd());
 
-        EN_WPN_CTRL_STATE currentState = m_currentState.load();
-
-        // 동일 상태면 성공으로 처리
-        if (currentState == targetState) {
-            DEBUG_STREAM(WEAPONSTATE) << "Already in target state: " << static_cast<int>(targetState) << std::endl;
-            return true;
+        // ABORT 명령은 즉시 처리
+        if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT) 
+        {
+            m_abortRequested.store(true);  // 발사 절차 중단 신호
+            DEBUG_STREAM(WEAPONSTATE) << "ABORT " << std::endl;
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT);
+            return;
         }
 
-        // 상태 전이 유효성 검사
-        if (!IsValidTransition(currentState, targetState)) {
-            DEBUG_ERROR_STREAM(WEAPONSTATE) << "Invalid state transition: " 
-                                            << static_cast<int>(currentState) 
-                                            << " -> " << static_cast<int>(targetState) << std::endl;
-            return false;
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+
+            EN_WPN_CTRL_STATE currentState = m_currentState.load();
+            // 동일 상태면 성공으로 처리
+            if (currentState == targetState) {
+                DEBUG_STREAM(WEAPONSTATE) << "Already in target state: " << static_cast<int>(targetState) << std::endl;
+                return;
+            }
+
+            // 상태 전이 유효성 검사
+            if (!IsValidTransition(currentState, targetState)) {
+                DEBUG_ERROR_STREAM(WEAPONSTATE) << "Invalid state transition: "
+                    << static_cast<int>(currentState)
+                    << " -> " << static_cast<int>(targetState) << std::endl;
+                return;
+            }
+            m_currentState.store(targetState);
         }
 
         // 발사 명령인 경우 발사 절차 시작
         if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH) {
-            if (m_launchInProgress.load()) {
-                DEBUG_ERROR_STREAM(WEAPONSTATE) << "Launch already in progress" << std::endl;
-                return false;
+            if (m_launchInProgress.exchange(true)) {
+                DEBUG_STREAM(WEAPONSTATE) << "Launch already in progress" << std::endl;
+                return;
             }
-
-            // 상태 업데이트
-            m_currentState.store(targetState);
-            m_launchInProgress.store(true);
-
-            DEBUG_STREAM(WEAPONSTATE) << "State transition successful: " 
-                                      << static_cast<int>(currentState) 
-                                      << " -> " << static_cast<int>(targetState) << std::endl;
-
-            // 발사 절차를 별도 스레드에서 처리
-            if (m_launchThread.joinable()) {
-                m_launchThread.join();
-            }
-            m_launchThread = std::thread(&WpnStatusCtrlManager::ProcessLaunchSequence, this);
-
-            return true;
+            std::thread([this]() { ProcessLaunchSequence(); }).detach();  // detached로 실행
         }
         else {
             // 일반 상태 전이
-            m_currentState.store(targetState);
-
-            DEBUG_STREAM(WEAPONSTATE) << "State transition successful: " 
-                                      << static_cast<int>(currentState) 
-                                      << " -> " << static_cast<int>(targetState) << std::endl;
-
-            return true;
         }
     }
 
@@ -164,20 +176,24 @@ namespace MINEASMALM {
             auto startTime = std::chrono::steady_clock::now();
             auto delayDuration = std::chrono::duration<double>(launchDelay_sec);
 
-            while (!m_shutdown.load()) {
+
+            while (!m_shutdown.load() && !m_abortRequested.load()) 
+            {
                 auto elapsed = std::chrono::steady_clock::now() - startTime;
                 if (elapsed >= delayDuration) {
                     break;
                 }
 
-                // 짧은 간격으로 shutdown 확인
+                // 짧은 간격으로 shutdown || abort 확인
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
 
-            // Shutdown 중이면 발사 절차 중단
-            if (m_shutdown.load()) {
+            // Shutdown or Abort이면 발사 절차 중단
+            if (m_shutdown.load() || m_abortRequested.load()) 
+            {
                 DEBUG_STREAM(WEAPONSTATE) << "Launch sequence aborted due to shutdown" << std::endl;
                 m_launchInProgress.store(false);
+                m_abortRequested.store(false); // 플래그 리셋
                 return;
             }
 
@@ -187,14 +203,14 @@ namespace MINEASMALM {
                 m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_POST_LAUNCH);
                 m_launchInProgress.store(false);
 
-                DEBUG_STREAM(WEAPONSTATE) << "Launch sequence completed for Tube " << m_tubeNumber 
-                                          << ", State transitioned to POST_LAUNCH" << std::endl;
+                DEBUG_STREAM(WEAPONSTATE) << "Launch sequence completed for Tube " << m_tubeNumber
+                    << ", State transitioned to POST_LAUNCH" << std::endl;
             }
         }
         catch (const std::exception& e) {
             DEBUG_ERROR_STREAM(WEAPONSTATE) << "Exception in launch sequence: " << e.what() << std::endl;
             m_launchInProgress.store(false);
+            m_abortRequested.store(false);
         }
     }
-
 } // namespace MINEASMALM
