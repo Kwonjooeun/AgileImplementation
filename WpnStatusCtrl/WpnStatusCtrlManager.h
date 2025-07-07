@@ -22,19 +22,20 @@ namespace MINEASMALM {
         // 종료
         void Shutdown();
 
+        void WorkerLoop();
+
         // 무장 상태 통제
         bool ProcessControlCommand(const CMSHCI_AIEP_WPN_CTRL_CMD& command);
         EN_WPN_CTRL_STATE GetCurrentState() const;
 
     private:
-        std::shared_ptr<DdsComm> m_ddsComm;
-
-        // 상태 전이 규칙 (문서에서 제공된 규칙)
+        // 상태 전이 규칙
         static const std::map<EN_WPN_CTRL_STATE, std::set<EN_WPN_CTRL_STATE>> s_validTransitions;
 
-        // 상태 전이 처리
-        bool TransitionState(EN_WPN_CTRL_STATE targetState);
+        // 상태 전이 확인
         bool IsValidTransition(EN_WPN_CTRL_STATE fromState, EN_WPN_CTRL_STATE toState) const;
+
+        std::shared_ptr<DdsComm> m_ddsComm;
 
         // 발사 절차 처리
         void ProcessLaunchSequence();
@@ -45,12 +46,16 @@ namespace MINEASMALM {
         std::atomic<EN_WPN_CTRL_STATE> m_currentState;
         std::atomic<bool> m_initialized;
         std::atomic<bool> m_shutdown;
-        
+        std::atomic<bool> m_abortRequested{ false };
+
         // 발사 절차용
         std::atomic<bool> m_launchInProgress;
-        std::thread m_launchThread;
-        
+
         mutable std::mutex m_stateMutex;
+
+        void SendWeaponStatus();
+        void ProcessControlCommandInternal(const CMSHCI_AIEP_WPN_CTRL_CMD& command);  // 실제 상태 전이 처리
+
     };
 
 } // namespace MINEASMALM
