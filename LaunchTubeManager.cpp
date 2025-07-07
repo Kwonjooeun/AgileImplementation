@@ -101,30 +101,40 @@ namespace MINEASMALM {
         //}
 
         try {
-            m_assignmentInfo = assignCmd;
             m_weaponKind = static_cast<EN_WPN_KIND>(assignCmd.stWpnAssign().enWeaponType());
 
             DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Assigning weapon " << static_cast<int>(m_weaponKind)
                 << " to LaunchTube " << m_tubeNumber << std::endl;
-            
+
             // 무장 상태 통제 관리자 생성
-            m_wpnStatusCtrlManager = std::make_unique<WpnStatusCtrlManager>();
+            m_wpnStatusCtrlManager = std::make_unique<WpnStatusCtrlManager>(
+                m_tubeNumber,
+                m_weaponKind,
+                m_ddsComm  // DDS 통신 주입
+                );
+
+            // 전용 스레드에서 워커 루프 실행
+            m_wpnStatusCtrlThread = std::thread([this]() {
+                m_wpnStatusCtrlManager->WorkerLoop();
+                });
+
             if (!m_wpnStatusCtrlManager) {
                 DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Failed to create WpnStatusCtrlManager" << std::endl;
                 return false;
             }
 
-            // 무장 상태 통제 관리자 초기화
-            if (!m_wpnStatusCtrlManager->Initialize(m_tubeNumber, m_weaponKind)) {
-                DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Failed to initialize WpnStatusCtrlManager" << std::endl;
-                m_wpnStatusCtrlManager.reset();
-                return false;
-            }
-            
+            //// 무장 상태 통제 관리자 초기화
+            //if (!m_wpnStatusCtrlManager->Initialize(m_tubeNumber, m_weaponKind)) {
+            //    DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Failed to initialize WpnStatusCtrlManager" << std::endl;
+            //    m_wpnStatusCtrlManager.reset();
+            //    return false;
+            //}
+
             // WeaponFactory를 통해 무장 관련 객체들 생성
 
+            m_assignmentInfo = assignCmd;
             m_isAssigned = true;
-            return true;           
+            return true;   
         }
         catch (const std::exception& e) {
             DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Exception during weapon assignment: " << e.what() << std::endl;
