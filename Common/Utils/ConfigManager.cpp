@@ -62,7 +62,7 @@ namespace MINEASMALM
     void ConfigManager::LoadWeaponSpecs(const ConfigReader& config) {
         // 시스템 섹션들 (무장이 아닌 섹션들)
         std::set<std::string> systemSections = {
-            "SystemInfra", "BusinessLogic", "Network", "Debug", "Logging", "DDS", "General"
+            "System", "BusinessLogic", "Network", "Debug", "Logging", "DDS", "General"
         };
 
         // 모든 섹션을 가져와서 시스템 섹션이 아닌 것들을 무장으로 간주
