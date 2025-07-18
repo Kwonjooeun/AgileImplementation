@@ -102,7 +102,11 @@ namespace MINEASMALM {
 
         try {
             m_weaponKind = static_cast<EN_WPN_KIND>(assignCmd.stWpnAssign().enWeaponType());
-
+            
+            WeaponAssignmentInfo AssignInfo;
+            AssignInfo = ConvertFromDdsMessage(assignCmd);
+            EngagementPlanningFactory& Factory = EngagementPlanningFactory::GetInstance();
+            
             DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Assigning weapon " << static_cast<int>(m_weaponKind)
                 << " to LaunchTube " << m_tubeNumber << std::endl;
 
@@ -113,28 +117,37 @@ namespace MINEASMALM {
                 m_ddsComm  // DDS 통신 주입
                 );
 
-            // 전용 스레드에서 워커 루프 실행
-            m_wpnStatusCtrlThread = std::thread([this]() {
-                m_wpnStatusCtrlManager->WorkerLoop();
-                });
-
             if (!m_wpnStatusCtrlManager) {
                 DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Failed to create WpnStatusCtrlManager" << std::endl;
                 return false;
             }
 
-            //// 무장 상태 통제 관리자 초기화
-            //if (!m_wpnStatusCtrlManager->Initialize(m_tubeNumber, m_weaponKind)) {
-            //    DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Failed to initialize WpnStatusCtrlManager" << std::endl;
-            //    m_wpnStatusCtrlManager.reset();
-            //    return false;
-            //}
+            // 2. 교전계획 관리자 생성
+            m_engagementManager = Factory.CreateEngagementManager(AssignInfo, m_ddsComm);
 
-            // WeaponFactory를 통해 무장 관련 객체들 생성
+            if (!m_engagementManager )//|| !m_engagementManager->Initialize(m_tubeNumber, m_weaponKind)) 
+            {
+                DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Failed to create or initialize EngagementManager" << std::endl;
+                m_wpnStatusCtrlManager.reset();
+                return false;
+            }
+
+            // 3. 콜백 함수들로 두 매니저 연결
+            DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Connecting managers with callback functions..." << std::endl;
+
+            // WpnStatusCtrlManager → LaunchTubeManager → EngagementManager (발사 완료 알림)
+            m_wpnStatusCtrlManager->SetLaunchCompletedNotifier([this](std::chrono::steady_clock::time_point launchTime) {
+                OnWeaponLaunched(launchTime);
+                });
+
+            // WpnStatusCtrlManager가 교전계획 준비 상태를 확인할 수 있도록 체크 함수 주입
+            m_wpnStatusCtrlManager->SetEngagementPlanChecker([this]() {
+                return m_engagementManager->IsEngagementPlanReady();
+                });
 
             m_assignmentInfo = assignCmd;
             m_isAssigned = true;
-            return true;   
+            return true;
         }
         catch (const std::exception& e) {
             DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Exception during weapon assignment: " << e.what() << std::endl;
@@ -149,28 +162,67 @@ namespace MINEASMALM {
             return true;
         }
 
-        //try {
-        //     무장 상태 OFF인지 확인 후 OFF 일 경우만 무장 해제 가능
+        try {
+            if (m_wpnStatusCtrlManager->GetCurrentState() != EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF)
+            {
+                DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Fail to unassign weapon: weapon status is not off" << std::endl;
+                return false;
+            }
 
-        //    DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Unassigning weapon from LaunchTube " << m_tubeNumber << std::endl;
-        //    return true;
-        //}
-        //catch (const std::exception& e) {
-        //    DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Exception during weapon unassignment: " << e.what() << std::endl;
-        //    return false;
-        //}
-    }
+            m_wpnStatusCtrlManager->Shutdown();
+            m_engagementManager->Shutdown();
 
-    bool LaunchTubeManager::ProcessWeaponControlCommand(const CMSHCI_AIEP_WPN_CTRL_CMD& command) {
-        std::lock_guard<std::mutex> lock(m_mutex);
+            m_isAssigned = false;
+            memset(&m_assignmentInfo, 0, sizeof(m_assignmentInfo));
+            m_weaponKind = EN_WPN_KIND::WPN_KIND_NA;
 
-        if (!m_isAssigned || !m_wpnStatusCtrlManager) {
-            DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "No weapon assigned to process control command" << std::endl;
+            DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Unassigning weapon from LaunchTube " << m_tubeNumber << std::endl;
+            return true;
+        }
+        catch (const std::exception& e) {
+            DEBUG_ERROR_STREAM(LAUNCHTUBEMANAGER) << "Exception during weapon unassignment: " << e.what() << std::endl;
             return false;
         }
+        return false;
+    }
 
-        DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Processing weapon control command for Tube " << m_tubeNumber << std::endl;
+    // 변환 함수 (한 곳에서만 DDS 메시지 구조 알면 됨)
+    WeaponAssignmentInfo LaunchTubeManager::ConvertFromDdsMessage(const TEWA_ASSIGN_CMD& ddsMsg) {
+        WeaponAssignmentInfo info;
 
-        return m_wpnStatusCtrlManager->ProcessControlCommand(command);
+        info.tubeNumber = ddsMsg.stWpnAssign().enTubeNum();
+        info.weaponKind = static_cast<EN_WPN_KIND>(ddsMsg.stWpnAssign().enWeaponType());        
+
+        // 무장별 특화 정보 추출
+        if (ddsMsg.stWpnAssign().enAllocLay() == 1 || ddsMsg.stWpnAssign().enAllocLay() == 2) {
+            info.dropPlanListNumber = ddsMsg.stWpnAssign().usAllocDroppingPlanListNum();
+            info.dropPlanNumber = ddsMsg.stWpnAssign().usAllocLayNum();
+        }
+        else if (ddsMsg.stWpnAssign().enAllocTrack()==1 || ddsMsg.stWpnAssign().enAllocTrack() == 2) {
+            info.systemTargetId = ddsMsg.stWpnAssign().unTrackNumber();
+        }
+        else if (ddsMsg.stWpnAssign().enAllocTarget() == 1 || ddsMsg.stWpnAssign().enAllocTarget() == 2) {
+            info.targetPosition = ddsMsg.stWpnAssign().stTargetPos();
+        }
+
+        info.requestConsole = ddsMsg.stWpnAssign().enConsoleNum();
+        info.allocConsole = ddsMsg.stWpnAssign().enAllocConsoleNum();
+
+        return info;
+    }
+
+    // ==========================================================================
+    // 핵심 콜백 함수들 (매니저 간 상호작용 처리)
+    // ==========================================================================
+    void LaunchTubeManager::OnWeaponLaunched(std::chrono::steady_clock::time_point launchTime) {
+        DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Tube " << m_tubeNumber << " - Weapon launched callback received" << std::endl;
+
+        if (!m_engagementManager) {
+            return;
+        }
+
+        // EngagementManager에게 발사 완료 알림
+        m_engagementManager->WeaponLaunched(launchTime);
+        DEBUG_STREAM(LAUNCHTUBEMANAGER) << "Tube " << m_tubeNumber << " notified engagement manager of launch" << std::endl;
     }
 } // namespace MINEASMALM
