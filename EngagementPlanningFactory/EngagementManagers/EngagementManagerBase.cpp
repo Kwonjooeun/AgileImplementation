@@ -1,7 +1,7 @@
 #include "EngagementManagerBase.h"
 #include <cstring>
 
-namespace AIEP {
+namespace MINEASMALM {
     // =============================================================================
     // EngagementManagerBase 구현
     // =============================================================================
