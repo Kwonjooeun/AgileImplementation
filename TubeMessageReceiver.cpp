@@ -48,14 +48,8 @@ namespace MINEASMALM {
             //m_ddsComm->RegisterReader<TRKMGR_SYSTEMTARGET_INFO>(
             //    [this](const TRKMGR_SYSTEMTARGET_INFO& msg) { OnTargetInfoReceived(msg); });
 
-            //m_ddsComm->RegisterReader<CMSHCI_AIEP_M_MINE_DROPPING_PLAN_REQ>(
-            //    [this](const CMSHCI_AIEP_M_MINE_DROPPING_PLAN_REQ& msg) { OnMineDropPlanRequestReceived(msg); });
-
             //m_ddsComm->RegisterReader<CMSHCI_AIEP_M_MINE_EDITED_PLAN_LIST>(
             //    [this](const CMSHCI_AIEP_M_MINE_EDITED_PLAN_LIST& msg) { OnEditedPlanListReceived(msg); });
-
-            //m_ddsComm->RegisterReader<CMSHCI_AIEP_M_MINE_SELECTED_PLAN>(
-            //    [this](const CMSHCI_AIEP_M_MINE_SELECTED_PLAN& msg) { OnSelectedPlanReceived(msg); });
 
             m_initialized.store(true);
 
