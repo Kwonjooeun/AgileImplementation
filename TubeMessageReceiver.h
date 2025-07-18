@@ -31,9 +31,7 @@ namespace MINEASMALM {
 		//void OnWaypointsReceived(const CMSHCI_AIEP_WPN_GEO_WAYPOINTS& message);
 		//void OnOwnShipInfoReceived(const NAVINF_SHIP_NAVIGATION_INFO& message);
 		//void OnTargetInfoReceived(const TRKMGR_SYSTEMTARGET_INFO& message);
-		//void OnMineDropPlanRequestReceived(const CMSHCI_AIEP_M_MINE_DROPPING_PLAN_REQ& message);
 		//void OnEditedPlanListReceived(const CMSHCI_AIEP_M_MINE_EDITED_PLAN_LIST& message);
-		//void OnSelectedPlanReceived(const CMSHCI_AIEP_M_MINE_SELECTED_PLAN& message);
 
 		// 멤버 변수
 		int m_tubeNumber;
