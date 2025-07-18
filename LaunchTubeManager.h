@@ -35,8 +35,8 @@ namespace MINEASMALM {
 	private:
 		// 멤버 변수
 		int m_tubeNumber;
-		std::atomic<bool> m_initialized;
 		std::shared_ptr<DdsComm> m_ddsComm;
+		std::thread m_wpnStatusCtrlThread;
 
 		// 적재된 무장 종류만 저장 (원자적 연산)
 		std::atomic<uint32_t> m_loadedWeaponKind{ static_cast<uint32_t>(EN_WPN_KIND::WPN_KIND_NA) };
@@ -48,15 +48,19 @@ namespace MINEASMALM {
 
 		// 무장 상태 통제 관리자
 		std::unique_ptr<WpnStatusCtrlManager> m_wpnStatusCtrlManager;
+		std::unique_ptr<IEngagementManager> m_engagementManager;
 
 		// 환경 정보
 		NAVINF_SHIP_NAVIGATION_INFO m_ownShipInfo;
 		std::map<uint32_t, TRKMGR_SYSTEMTARGET_INFO> m_targetInfoMap;
 
 		// 상태
+		std::atomic<bool> m_initialized;
 		std::atomic<bool> m_shutdown;
 
 		// 동기화
 		mutable std::mutex m_mutex;
+		WeaponAssignmentInfo ConvertFromDdsMessage(const TEWA_ASSIGN_CMD& ddsMsg);
+		void OnWeaponLaunched(std::chrono::steady_clock::time_point launchTime);
 	};
 } // namespace MINEASMALM
