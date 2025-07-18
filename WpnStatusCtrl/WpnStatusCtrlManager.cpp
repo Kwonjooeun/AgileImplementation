@@ -21,15 +21,16 @@ namespace MINEASMALM {
         , m_currentState(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF)
         , m_initialized(false)
         , m_shutdown(false)
-        , m_launchInProgress(false)
     {
         if (!ddsComm) {
             throw std::invalid_argument("DdsComm cannot be null");
         }
-    
+
         m_shutdown.store(false);
         m_launchInProgress.store(false);
         m_initialized.store(true);
+
+        m_wpnStatusCtrlThread = std::thread([this]() {WorkerLoop();}); // 생성과 동시에 loop 시작
     
         DEBUG_STREAM(WEAPONSTATE) << "WpnStatusCtrlManager initialized for Tube " << m_tubeNumber 
                                   << ", Weapon Kind: " << static_cast<int>(m_weaponKind) << std::endl;
@@ -48,14 +49,20 @@ namespace MINEASMALM {
 
         m_shutdown.store(true);
         m_abortRequested.store(true);
-
+        m_wpnStatusCtrlThread.join();
         int waitCount{ 0 };
 
         {
             std::lock_guard<std::mutex> lock(m_stateMutex);
             m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF);
         }
-
+        // 콜백 함수들 정리
+        {
+            std::lock_guard<std::mutex> lock(m_callbackMutex);
+            m_isEngagementPlanReady = nullptr;
+            m_onWeaponLaunched = nullptr;
+        }
+        m_rtlCheckActive.store(false);
         m_launchInProgress.store(false);
         m_initialized.store(false);
     }
@@ -74,6 +81,7 @@ namespace MINEASMALM {
                 SendWeaponStatus();
                 lastStatusSend = now;
             }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
         DEBUG_STREAM(WEAPONSTATE) << "WorkerLoop ended for Tube " << m_tubeNumber << std::endl;
@@ -114,6 +122,21 @@ namespace MINEASMALM {
         return it->second.find(toState) != it->second.end();
     }
 
+
+    // LaunchTubeManager가 교전계획 준비 상태 체크 함수를 주입
+    void WpnStatusCtrlManager::SetEngagementPlanChecker(std::function<bool()> checker) {
+        std::lock_guard<std::mutex> lock(m_callbackMutex);
+        m_isEngagementPlanReady = checker;
+        DEBUG_STREAM(WEAPONSTATE) << "Engagement plan checker function injected for Tube " << m_tubeNumber << std::endl;
+    }
+
+    // LaunchTubeManager가 발사 완료 알림 콜백을 주입
+    void WpnStatusCtrlManager::SetLaunchCompletedNotifier(std::function<void(std::chrono::steady_clock::time_point)> notifier) {
+        std::lock_guard<std::mutex> lock(m_callbackMutex);
+        m_onWeaponLaunched = notifier;
+        DEBUG_STREAM(WEAPONSTATE) << "Launch completed notifier function injected for Tube " << m_tubeNumber << std::endl;
+    }
+
     void WpnStatusCtrlManager::ProcessControlCommandInternal(const CMSHCI_AIEP_WPN_CTRL_CMD& command) 
     {
         EN_WPN_CTRL_STATE targetState = static_cast<EN_WPN_CTRL_STATE>(command.eWpnCtrlCmd());
@@ -146,29 +169,79 @@ namespace MINEASMALM {
                 return;
             }
             m_currentState.store(targetState);
-        }
+        }      
         
-        if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON) 
+        // 무장 켬 후 경과 시간 저장
+        if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON)
         {
             m_weaponOnTime = std::chrono::steady_clock::now();
             m_isWeaponOn.store(true);
+
+            // ON 상태가 되면 RTL 전이 체크 시작
+            CheckForRTLTransition();
         }
         else if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF) 
         {
             m_isWeaponOn.store(false);
+            m_rtlCheckActive.store(false);
+
         }
-        
         // 발사 명령인 경우 발사 절차 시작
-        if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH) {
+        else if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH) {
             if (m_launchInProgress.exchange(true)) {
                 DEBUG_STREAM(WEAPONSTATE) << "Launch already in progress" << std::endl;
                 return;
             }
+
             std::thread([this]() { ProcessLaunchSequence(); }).detach();  // detached로 실행
         }
         else {
             // 일반 상태 전이
         }
+    }
+
+    void WpnStatusCtrlManager::ChangeWeaponState(EN_WPN_CTRL_STATE newState) {
+        EN_WPN_CTRL_STATE previousState = m_currentState.exchange(newState);
+
+        DEBUG_STREAM(WEAPONSTATE) << "Tube " << m_tubeNumber << " state changed: "
+            << static_cast<int>(previousState) << " -> " << static_cast<int>(newState) << std::endl;
+    }
+
+    void WpnStatusCtrlManager::CheckForRTLTransition() {
+        // 이미 RTL 체크가 활성화되어 있으면 무시
+        if (m_rtlCheckActive.exchange(true)) {
+            return;
+        }
+
+        std::thread([this]() {
+            DEBUG_STREAM(WEAPONSTATE) << "RTL transition check started for Tube " << m_tubeNumber << std::endl;
+
+            while (m_currentState.load() == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON &&
+                !m_shutdown.load() &&
+                m_rtlCheckActive.load()) {
+
+                // 콜백 함수로 교전계획 준비 상태 확인
+                bool planReady = false;
+                {
+                    std::lock_guard<std::mutex> lock(m_callbackMutex);
+                    if (m_isEngagementPlanReady) {
+                        planReady = m_isEngagementPlanReady();
+                    }
+                }
+
+                if (planReady) {
+                    // 교전계획이 준비되었으면 RTL로 전이
+                    ChangeWeaponState(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_RTL);
+                    DEBUG_STREAM(WEAPONSTATE) << "Auto transition to RTL for Tube " << m_tubeNumber << std::endl;
+                    break;
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+
+            m_rtlCheckActive.store(false);
+            DEBUG_STREAM(WEAPONSTATE) << "RTL transition check ended for Tube " << m_tubeNumber << std::endl;
+            }).detach();
     }
 
     void WpnStatusCtrlManager::ProcessLaunchSequence() {
@@ -215,6 +288,16 @@ namespace MINEASMALM {
 
                 DEBUG_STREAM(WEAPONSTATE) << "Launch sequence completed for Tube " << m_tubeNumber
                     << ", State transitioned to POST_LAUNCH" << std::endl;
+            }
+            
+            auto launchTime = std::chrono::steady_clock::now();
+            // 콜백 함수로 발사 완료 알림
+            {
+                std::lock_guard<std::mutex> lock(m_callbackMutex);
+                if (m_onWeaponLaunched) {
+                    m_onWeaponLaunched(launchTime);
+                    DEBUG_STREAM(WEAPONSTATE) << "Launch completed callback invoked for Tube " << m_tubeNumber << std::endl;
+                }
             }
         }
         catch (const std::exception& e) {
