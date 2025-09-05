@@ -7,12 +7,11 @@
 #include <mutex>
 #include <atomic>
 
-namespace MINEASMALM {
-
+namespace AIEP {
 	class LaunchTubeManager
 	{
 	public:
-		explicit LaunchTubeManager(int tubeNumber, std::shared_ptr<DdsComm> ddsComm);
+		explicit LaunchTubeManager(int tubeNumber, std::shared_ptr<AIEP::DdsComm> ddsComm);
 		~LaunchTubeManager();
 
 		// 초기화 및 종료
@@ -23,19 +22,39 @@ namespace MINEASMALM {
 		void UpdateLoadedWeaponKind(EN_WPN_KIND weaponKind);
 
 		// 할당 가능 여부 확인
-		bool CanAssignWeapon(const TEWA_ASSIGN_CMD& assignCmd) const;
+		bool IsWeaponTypeCompatible(const TEWA_ASSIGN_CMD& assignCmd) const;
 
 		// 무장 할당 관리
 		bool AssignWeapon(const TEWA_ASSIGN_CMD& assignCmd);
 		bool UnassignWeapon();
 
+		// 수신 명령의 무장 정보 확인
+		bool IsCommandForThisWeapon(uint32_t weaponKindInCmd);
+
+		// 금지구역 정보 수신
+		bool ProcessPAInfo(const CMSHCI_AIEP_PA_INFO& paInfo);
+
 		// 무장 상태 통제
 		bool ProcessWeaponControlCommand(const CMSHCI_AIEP_WPN_CTRL_CMD& command);
 
+		// 경로점 수정
+		bool ProcessWaypointCommand(const CMSHCI_AIEP_WPN_GEO_WAYPOINTS& command);
+
+		// 자함 정보
+		bool ProcessOwnshipInfo(const NAVINF_SHIP_NAVIGATION_INFO& ownshipInfo);
+
+		// 시스템 표적 정보
+		bool ProcessSystemTargetInfo(const TRKMGR_SYSTEMTARGET_INFO& systemtargetInfo);
+
+		// AI 경로점 요청
+		bool ProcessAIWaypointsInferenceRequest(const CMSHCI_AIEP_AI_WAYPOINTS_INFERENCE_REQ& command);
+
+		// AI 경로점 결과 후처리 후 전송
+		bool ProcessAIWaypointsInferenceResult(const AIEP_INTERNAL_INFER_RESULT_WP& command);
 	private:
 		// 멤버 변수
 		int m_tubeNumber;
-		std::shared_ptr<DdsComm> m_ddsComm;
+		std::shared_ptr<AIEP::DdsComm> m_ddsComm;
 		std::thread m_wpnStatusCtrlThread;
 
 		// 적재된 무장 종류만 저장 (원자적 연산)
@@ -44,7 +63,7 @@ namespace MINEASMALM {
 		// 할당 정보
 		TEWA_ASSIGN_CMD m_assignmentInfo;
 		bool m_isAssigned;
-		EN_WPN_KIND m_weaponKind;
+		uint32_t m_weaponKind;
 
 		// 무장 상태 통제 관리자
 		std::unique_ptr<WpnStatusCtrlManager> m_wpnStatusCtrlManager;
@@ -60,7 +79,6 @@ namespace MINEASMALM {
 
 		// 동기화
 		mutable std::mutex m_mutex;
-		WeaponAssignmentInfo ConvertFromDdsMessage(const TEWA_ASSIGN_CMD& ddsMsg);
 		void OnWeaponLaunched(std::chrono::steady_clock::time_point launchTime);
 	};
-} // namespace MINEASMALM
+} // namespace AIEP
