@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -9,25 +10,34 @@
 #include "Common/Communication/DdsComm.h"
 #include "LaunchTubeManager.h"
 #include "TubeMessageReceiver.h"
-
-static std::unique_ptr<MINEASMALM::LaunchTubeManager> g_launchTubemanager = nullptr;
-static std::unique_ptr<MINEASMALM::TubeMessageReceiver> g_messagereceiver = nullptr;
-static std::atomic<bool> g_running(true);
+#include <cassert>
 
 //int argc, char* argv[]
 int main() {
-    // 1. 전체 설정 로드 (한 번만)
-    auto& config = MINEASMALM::ConfigManager::GetInstance();
-    if (!config.LoadFromFile("config.ini")) {
-        return 1;
-    }
+    static std::unique_ptr<AIEP::LaunchTubeManager> g_launchTubemanager = nullptr;
+    static std::unique_ptr<AIEP::TubeMessageReceiver> g_messagereceiver = nullptr;
+    static std::atomic<bool> g_running(true);
 
+    // 1. 전체 설정 로드 (한 번만)
+    auto& config = AIEP::ConfigManager::GetInstance();
+    bool configLoaded = config.LoadFromFile("config.ini");
+    assert(configLoaded);
     // 2. main에서는 시스템 인프라 설정만 관심
     const auto& sysInfra = config.GetSystemInfraConfig();
 
-    // 디버깅용 임시 선언
-    int tubeNumber = 1; //std::atoi(argv[1]);
+    // 디버깅용 임시 선언7
+    int tubeNumber = 1;//std::atoi(argv[1]);
+
     DebugLogger::Initialize(tubeNumber);
+    //// 로그 초기화
+    //if (sysInfra.enableDebugMode) {
+    //    DebugLogger::Initialize(tubeNumber, "debug.log");
+    //}
+    //if (argc != 2) {
+    //    std::cerr << "Usage: LaunchTubeProcess.exe <tube_number>" << std::endl;
+    //    std::cerr << "Example: LaunchTubeProcess.exe 1" << std::endl;
+    //    return 1;
+    //}
 
     if (tubeNumber < 1 || tubeNumber > sysInfra.totalTubes) {
 #ifdef CONSOLMESSAGE
@@ -36,6 +46,7 @@ int main() {
         return 1;
     }
 
+
     DEBUG_STREAM(MAIN) << "Starting LaunchTubeProcess for Tube # " << tubeNumber << std::endl;
 #ifdef CONSOLMESSAGE
     std::cout << "Starting LaunchTubeProcess for Tube " << tubeNumber << std::endl;
@@ -43,25 +54,13 @@ int main() {
 
     try {
         // DDS 통신 초기화
-        auto ddsComm = std::make_shared<DdsComm>();
-        if (!ddsComm->Initialize()) { // 송신용 메시지 등록
-            DEBUG_ERROR_STREAM(MAIN) << "Failed to initialize DDS communication" << std::endl;
-            return 1;
-        }
+        auto ddsComm = std::make_shared<AIEP::DdsComm>(sysInfra.ddsDomainId);
 
         // 발사관 생성 및 초기화
-        g_launchTubemanager = std::make_unique<MINEASMALM::LaunchTubeManager>(tubeNumber, ddsComm);
-        if (!g_launchTubemanager->Initialize()) {
-            DEBUG_ERROR_STREAM(MAIN) << "Failed to initialize LaunchTubeManager " << tubeNumber << std::endl;
-            return 1;
-        }
+        g_launchTubemanager = std::make_unique<AIEP::LaunchTubeManager>(tubeNumber, ddsComm);
 
         // 메시지 핸들러 생성 및 초기화
-        g_messagereceiver = std::make_unique<MINEASMALM::TubeMessageReceiver>(tubeNumber, g_launchTubemanager.get(), ddsComm);
-        if (!g_messagereceiver->Initialize()) {
-            DEBUG_ERROR_STREAM(MAIN) << "Failed to initialize TubeMessageReceiver" << std::endl;
-            return 1;
-        }
+        g_messagereceiver = std::make_unique<AIEP::TubeMessageReceiver>(tubeNumber, g_launchTubemanager.get(), ddsComm);
 
         ddsComm->Start();
 
@@ -70,7 +69,7 @@ int main() {
             // main 함수 종료 안되게 하는 loop
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
-                DEBUG_STREAM(MAIN) << "Shutting down systems..." << std::endl;
+        DEBUG_STREAM(MAIN) << "Shutting down systems..." << std::endl;
 
         // 정리 작업
         if (g_messagereceiver) {
@@ -91,4 +90,6 @@ int main() {
         DEBUG_ERROR_STREAM(MAIN) << "Fatal error: " << e.what() << std::endl;
         return 1;
     }
+
+    return 0;
 }
