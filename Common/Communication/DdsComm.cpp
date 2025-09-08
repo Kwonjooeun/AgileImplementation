@@ -1,6 +1,12 @@
 #include "DdsComm.h"
 
+namespace AIEP {
 DdsComm::DdsComm() {
+    Initialize();
+}
+
+DdsComm::DdsComm(int domainId)
+    : dds({}, domainId) {
     Initialize();
 }
 
@@ -21,4 +27,5 @@ void DdsComm::RegisterWriters() {
 }
 DdsComm::~DdsComm() {
 
+}
 }
