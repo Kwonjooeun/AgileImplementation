@@ -734,4 +734,156 @@ namespace AIEP {
 			return false;
 		}
 	}
+
+	bool M_MineDroppingPlanManager::updatePlanState(const std::string& filename,
+		int planListIndex,
+		int planIndex,
+		EN_M_MINE_PLAN_STATE newState) {
+		// 1. 인덱스 유효성 검사
+		if (planListIndex < 0 || planListIndex >= 15) {
+			std::cerr << "Error: planListIndex " << planListIndex
+				<< " is out of range (0-14)" << std::endl;
+			return false;
+		}
+
+		if (planIndex < 0 || planIndex >= 15) {
+			std::cerr << "Error: planIndex " << planIndex
+				<< " is out of range (0-14)" << std::endl;
+			return false;
+		}
+
+		// 2. 파일이 존재하지 않으면 생성
+		ensure_json_file_exists(filename);
+
+		try {
+			// 3. JSON 파일 읽기
+			std::ifstream ifs(filename);
+			if (!ifs.is_open()) {
+				std::cerr << "Error: Could not open file " << filename << std::endl;
+				return false;
+			}
+
+			json j;
+			ifs >> j;
+			ifs.close();
+
+			// 4. JSON 구조 유효성 검사
+			if (!j.contains("stMinePlanList") || !j["stMinePlanList"].is_array()) {
+				std::cerr << "Error: Invalid JSON structure - missing stMinePlanList" << std::endl;
+				return false;
+			}
+			
+			if (j["stMinePlanList"].size() <= planListIndex) {
+				std::cerr << "Error: planListIndex " << planListIndex
+					<< " exceeds available plan lists" << std::endl;
+				return false;
+			}
+
+			auto& planList = j["stMinePlanList"][planListIndex];
+			if (!planList.contains("stPlan") || !planList["stPlan"].is_array()) {
+				std::cerr << "Error: Invalid plan list structure" << std::endl;
+				return false;
+			}
+
+			if (planList["stPlan"].size() <= planIndex) {
+				std::cerr << "Error: planIndex " << planIndex
+					<< " exceeds available plans in list" << std::endl;
+				return false;
+			}
+
+			// 5. 이전 상태 기록 (디버깅용)
+			EN_M_MINE_PLAN_STATE oldState =
+				static_cast<EN_M_MINE_PLAN_STATE>(planList["stPlan"][planIndex]["ePlanState"].get<int>());
+
+			// 6. 상태 변경
+			planList["stPlan"][planIndex]["ePlanState"] = static_cast<int>(newState);
+
+			// 7. 파일에 저장
+			std::ofstream ofs(filename);
+			if (!ofs.is_open()) {
+				std::cerr << "Error: Could not open file for writing: " << filename << std::endl;
+				return false;
+			}
+
+			ofs << j.dump(4);
+			ofs.close();
+
+			// 8. 성공 로그
+			std::cout << "Plan state updated successfully:" << std::endl;
+			std::cout << "  File: " << filename << std::endl;
+			std::cout << "  Plan List[" << planListIndex << "] Plan[" << planIndex << "]" << std::endl;
+			std::cout << "  Old State: (" << static_cast<int>(oldState) << ")" << std::endl;
+			std::cout << "  New State: " << " (" << static_cast<int>(newState) << ")" << std::endl;
+
+			return true;
+		}
+		catch (const json::exception& e) {
+			std::cerr << "JSON parsing error: " << e.what() << std::endl;
+			return false;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "Error updating plan state: " << e.what() << std::endl;
+			return false;
+		}
+	}
+
+	bool M_MineDroppingPlanManager::getPlanState(const std::string& filename,
+		int planListIndex,
+		int planIndex,
+		EN_M_MINE_PLAN_STATE& outState) {
+		// 인덱스 유효성 검사
+		if (planListIndex < 0 || planListIndex >= 15) {
+			std::cerr << "Error: planListIndex " << planListIndex
+				<< " is out of range (0-14)" << std::endl;
+			return false;
+		}
+
+		
+		if (planIndex < 0 || planIndex >= 15) {
+			std::cerr << "Error: planIndex " << planIndex
+				<< " is out of range (0-14)" << std::endl;
+			return false;
+		}
+
+		try {
+			// JSON 파일 읽기
+			std::ifstream ifs(filename);
+			if (!ifs.is_open()) {
+				std::cerr << "Error: Could not open file " << filename << std::endl;
+				return false;
+			}
+
+			json j;
+			ifs >> j;
+			ifs.close();
+
+			// JSON 구조 검증
+			if (!j.contains("stMinePlanList") || !j["stMinePlanList"].is_array() ||
+				j["stMinePlanList"].size() <= planListIndex) {
+				std::cerr << "Error: Invalid stMinePlanList or index out of range" << std::endl;
+				return false;
+			}
+
+			auto& planList = j["stMinePlanList"][planListIndex];
+			if (!planList.contains("stPlan") || !planList["stPlan"].is_array() ||
+				planList["stPlan"].size() <= planIndex) {
+				std::cerr << "Error: Invalid stPlan or index out of range" << std::endl;
+				return false;
+			}
+
+			// 상태 조회
+			int stateValue = planList["stPlan"][planIndex]["ePlanState"];
+			outState = static_cast<EN_M_MINE_PLAN_STATE>(stateValue);
+
+			return true;
+		}
+		catch (const json::exception& e) {
+			std::cerr << "JSON parsing error: " << e.what() << std::endl;
+			return false;
+		}
+				catch (const std::exception& e) {
+			std::cerr << "Error getting plan state: " << e.what() << std::endl;
+			return false;
+		}
+	}
 }
