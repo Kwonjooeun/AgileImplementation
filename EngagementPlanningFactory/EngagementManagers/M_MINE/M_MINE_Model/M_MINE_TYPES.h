@@ -2,27 +2,28 @@
 #include <vector>
 #include "../../utils/AIEP_Defines.h"
 
-namespace MINEASMALM {
-	//typedef unsigned char boolean;
+namespace AIEP {
 	typedef unsigned char octet;
 	typedef int EWF_TUBE_NUM;
-	//typedef unsigned char uint8_t;
 
 	// 교전계획 결과 (ENU)
 	struct SAL_MINE_EP_RESULT
 	{
+		float timeSinceLaunch_sec;	// 발사 후 경과시간 [sec]
 		float time_to_destination;	// 부설 지점까지 총 소요 시간 [sec]
 		float RemainingTime;		// 부설 지점까지 남은 시간 [sec]
 
-		int BatteryCapacity_percentage;
-		float BatteryTime_sec;
+		int BatteryCapacity_percentage;	// 축전지 잔여 사용량 [percentage]
+		float BatteryTime_sec;			// 축전지 잔여 사용 가능 시간
+		float TotalEnergyConsumed_Wh;	// 축전지 사용량 [Wh]
+		float CurrentBatteryCapacity_Wh;// 현재 축전지 사용 가능량 [Wh] ( {초기 축전지 잔량} - {축전지 사용량} )
 
-		int number_of_trajectory;
-		std::vector<SPOINT_ENU> trajectory;
-		std::vector<SPOINT_ENU> flightTimeOfTrajectory;
+		int number_of_trajectory;					// 무장 제원 내의 궤적 배열 길이를 따름 (현재 길이는 128)
+		std::vector<SPOINT_ENU> trajectory;			// 궤적 배열 
+		std::vector<double> flightTimeOfTrajectory; // 해당 위치에 도달하는 데 걸리는 시간
 
-		int number_of_waypoint;		// 경로점 개수
-		std::vector <SPOINT_WEAPON_ENU> waypoints;
+		int number_of_valid_waypoint;				// 유효 경로점 개수
+		std::vector <SPOINT_WEAPON_ENU> waypoints;	// 유효 경로점
 		std::vector <float> waypointsArrivalTimes;	// 각 경로점까지의 소요시간
 
 		SPOINT_WEAPON_ENU LaunchPoint;	// 발사 지점
@@ -32,11 +33,30 @@ namespace MINEASMALM {
 		float timeToNextWP;	// 다음 경로점까지 남은 시간 [sec]
 
 		bool bValidMslDRPos{ false };	// 탄 위치 유효성
-		SPOINT_ENU mslDRPos;	// 탄 위치
+		SPOINT_ENU mslDRPos;			// 탄 위치
+
+		int cachedPlanState;
 
 		void reset()
 		{
-			memset(this, 0, sizeof(SAL_MINE_EP_RESULT));
+						memset(this, 0, sizeof(SAL_MINE_EP_RESULT));
+		}
+
+		void resetTrajectoryInfo()
+		{
+			time_to_destination = 0.;
+			RemainingTime = 0.;
+
+			BatteryCapacity_percentage = 0;
+			BatteryTime_sec = 0.;
+
+			number_of_trajectory = 0;
+			trajectory.clear();
+			flightTimeOfTrajectory.clear();
+
+			waypointsArrivalTimes.clear();
+
+			idxOfNextWP = 1;
 		}
 	};
 
@@ -67,6 +87,7 @@ namespace MINEASMALM {
 		double I_X, I_Y, I_Z;
 		int lastWP;
 		double tempSPEED;
+
 		// KSY Add
 		double current_SPD;
 		unsigned long ulLaunchTime;
