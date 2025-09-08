@@ -1,18 +1,18 @@
 #include "EngagementPlanningFactory.h"
 #include "EngagementManagers/M_MINE/MineEngagementManager.h"
-#include "EngagementManagers/Missile/MissileEngagementManager.h"
+#include "EngagementManagers/Missile/CMslEngagementManager.h"
 #include "../Common/Utils/DebugPrint.h"
 #include "../Common/Utils/ConfigManager.h"
 
 namespace AIEP {
 
     // 지원되는 무장 종류들 정의
-    const std::set<EN_WPN_KIND> s_supportedWeaponKinds = {
-        EN_WPN_KIND::WPN_KIND_M_MINE,   // 자항기뢰
-        EN_WPN_KIND::WPN_KIND_ALM,      // 잠대지유도탄
-        EN_WPN_KIND::WPN_KIND_ASM,      // 잠대함유도탄
-        EN_WPN_KIND::WPN_KIND_AAM,      // 잠대공유도탄
-        EN_WPN_KIND::WPN_KIND_WGT       // 선유도중어뢰
+    const std::set<uint32_t> s_supportedWeaponKinds = {
+        static_cast<uint32_t>(EN_WPN_KIND::WPN_KIND_M_MINE),   // 자항기뢰
+        static_cast<uint32_t>(EN_WPN_KIND::WPN_KIND_ALM),      // 잠대지유도탄
+        static_cast<uint32_t>(EN_WPN_KIND::WPN_KIND_ASM),      // 잠대함유도탄
+        static_cast<uint32_t>(EN_WPN_KIND::WPN_KIND_AAM),      // 잠대공유도탄
+        static_cast<uint32_t>(EN_WPN_KIND::WPN_KIND_WGT)       // 선유도중어뢰
     };
 
     EngagementPlanningFactory& EngagementPlanningFactory::GetInstance() {
@@ -21,38 +21,39 @@ namespace AIEP {
     }
 
     std::unique_ptr<IEngagementManager> EngagementPlanningFactory::CreateEngagementManager(
-        WeaponAssignmentInfo weaponAssignInfo,
-        std::shared_ptr<DdsComm> ddsComm) {
+        ST_WA_SESSION weaponAssignInfo,
+        std::shared_ptr<AIEP::DdsComm> ddsComm) {
 
         if (!ddsComm) {
             DEBUG_ERROR_STREAM(WEAPONFACTORY) << "DdsComm cannot be null" << std::endl;
             return nullptr;
         }
-        EN_WPN_KIND weaponKind = weaponAssignInfo.weaponKind;
-        int tubeNumber = weaponAssignInfo.tubeNumber;
+        uint32_t weaponKind = weaponAssignInfo.enWeaponType();
+        int tubeNumber = weaponAssignInfo.enTubeNum();
 
         if (!IsWeaponKindSupported(weaponKind)) {
             DEBUG_ERROR_STREAM(WEAPONFACTORY) << "Unsupported weapon kind: "
-                << static_cast<int>(weaponKind) << std::endl;
+                << weaponKind << std::endl;
             return nullptr;
         }
+
 
         // ConfigManager에서 무장 지원 여부 확인
         auto& configMgr = ConfigManager::GetInstance();
         if (!configMgr.IsWeaponSupported(weaponKind)) {
             DEBUG_ERROR_STREAM(WEAPONFACTORY) << "Weapon kind not configured: "
-                << static_cast<int>(weaponKind) << std::endl;
+                << weaponKind << std::endl;
             return nullptr;
         }
 
         DEBUG_STREAM(WEAPONFACTORY) << "Creating EngagementManager for Tube " << tubeNumber
             << ", Weapon: " << configMgr.GetWeaponName(weaponKind)
-            << " (" << static_cast<int>(weaponKind) << ")" << std::endl;
+            << " (" << weaponKind << ")" << std::endl;
 
         try {
             std::unique_ptr<IEngagementManager> manager;
 
-            switch (weaponKind) {
+            switch (static_cast<EN_WPN_KIND>(weaponKind)) {
             case EN_WPN_KIND::WPN_KIND_M_MINE:
                 manager = CreateMineEngagementManager(weaponAssignInfo, ddsComm);
                 break;
@@ -61,7 +62,7 @@ namespace AIEP {
             case EN_WPN_KIND::WPN_KIND_ASM:
             case EN_WPN_KIND::WPN_KIND_AAM:
             case EN_WPN_KIND::WPN_KIND_WGT:
-                //manager = CreateMissileEngagementManager(weaponAssignInfo, ddsComm);
+                manager = CreateMissileEngagementManager(weaponAssignInfo, ddsComm);
                 break;
 
             default:
@@ -89,17 +90,17 @@ namespace AIEP {
         }
     }
 
-    bool EngagementPlanningFactory::IsWeaponKindSupported(EN_WPN_KIND weaponKind) const {
+    bool EngagementPlanningFactory::IsWeaponKindSupported(uint32_t weaponKind) const {
         return s_supportedWeaponKinds.find(weaponKind) != s_supportedWeaponKinds.end();
     }
 
     std::unique_ptr<IEngagementManager> EngagementPlanningFactory::CreateMineEngagementManager(
-        WeaponAssignmentInfo weaponAssignInfo, std::shared_ptr<DdsComm> ddsComm) {
+        ST_WA_SESSION weaponAssignInfo, std::shared_ptr<AIEP::DdsComm> ddsComm) {
 
         try {
             std::unique_ptr<IEngagementManager> manager = std::make_unique<MineEngagementManager>(weaponAssignInfo, ddsComm);
 
-            DEBUG_STREAM(WEAPONFACTORY) << "MineEngagementManager created for Tube " << weaponAssignInfo.tubeNumber << std::endl;
+            DEBUG_STREAM(WEAPONFACTORY) << "MineEngagementManager created for Tube " << weaponAssignInfo.enTubeNum() << std::endl;
 
             return std::move(manager);
         }
@@ -108,4 +109,12 @@ namespace AIEP {
             return nullptr;
         }
     }
-}
+
+    std::unique_ptr<IEngagementManager> EngagementPlanningFactory::CreateMissileEngagementManager(
+        ST_WA_SESSION weaponAssignInfo, std::shared_ptr<AIEP::DdsComm> ddsComm){
+        auto manager = std::make_unique<CMslEngagementManager>(weaponAssignInfo, ddsComm);
+        DEBUG_STREAM(WEAPONFACTORY) << "MissileEngagementManager created for Tube " << weaponAssignInfo.enTubeNum() << std::endl;
+        return std::move(manager);
+    }
+
+} // namespace AIEP
