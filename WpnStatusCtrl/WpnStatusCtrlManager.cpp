@@ -1,20 +1,20 @@
 #include "WpnStatusCtrlManager.h"
 #include "../Common/Utils/ConfigManager.h"
 
-namespace MINEASMALM {
+namespace AIEP {
 
-    // 무장 상태 전이 규칙 (문서에서 제공된 규칙)
-    const std::map<EN_WPN_CTRL_STATE, std::set<EN_WPN_CTRL_STATE>> 
-    WpnStatusCtrlManager::s_validTransitions = {
-        {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON}},
-        {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}},
-        {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_RTL, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH, EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}},
-        {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT}},
-        {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}},
-        {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_POST_LAUNCH, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}}
-    };
+    // 무장 상태 전이 규칙
+    const std::map<EN_WPN_CTRL_STATE, std::set<EN_WPN_CTRL_STATE>>
+        WpnStatusCtrlManager::s_validTransitions = {
+            {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON}},
+            {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}},
+            {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_RTL, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH, EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}},
+            {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT}},
+            {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}},
+            {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_POST_LAUNCH, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}}
+        };
 
-    WpnStatusCtrlManager::WpnStatusCtrlManager(int tubeNumber, EN_WPN_KIND weaponKind, std::shared_ptr<DdsComm> ddsComm)
+    WpnStatusCtrlManager::WpnStatusCtrlManager(int tubeNumber, uint32_t weaponKind, std::shared_ptr<AIEP::DdsComm> ddsComm)
         : m_tubeNumber(tubeNumber)
         , m_weaponKind(weaponKind)
         , m_ddsComm(ddsComm)
@@ -26,14 +26,13 @@ namespace MINEASMALM {
             throw std::invalid_argument("DdsComm cannot be null");
         }
 
-        m_shutdown.store(false);
         m_launchInProgress.store(false);
         m_initialized.store(true);
 
         m_wpnStatusCtrlThread = std::thread([this]() {WorkerLoop();}); // 생성과 동시에 loop 시작
-    
-        DEBUG_STREAM(WEAPONSTATE) << "WpnStatusCtrlManager initialized for Tube " << m_tubeNumber 
-                                  << ", Weapon Kind: " << static_cast<int>(m_weaponKind) << std::endl;
+
+        DEBUG_STREAM(WEAPONSTATE) << "WpnStatusCtrlManager initialized for Tube " << m_tubeNumber
+            << ", Weapon Kind: " << static_cast<int>(m_weaponKind) << std::endl;
     }
 
     WpnStatusCtrlManager::~WpnStatusCtrlManager() {
@@ -49,7 +48,11 @@ namespace MINEASMALM {
 
         m_shutdown.store(true);
         m_abortRequested.store(true);
-        m_wpnStatusCtrlThread.join();
+
+        if (m_wpnStatusCtrlThread.joinable()) {
+            m_wpnStatusCtrlThread.join();
+        }
+
         int waitCount{ 0 };
 
         {
@@ -76,7 +79,7 @@ namespace MINEASMALM {
         while (!m_shutdown.load()) {
             auto now = std::chrono::steady_clock::now();
 
-            // 1초마다 상태 송신 (mutex로 상태 보호)
+            // 1초마다 상태 송신
             if (now - lastStatusSend >= std::chrono::seconds(1)) {
                 SendWeaponStatus();
                 lastStatusSend = now;
@@ -90,14 +93,6 @@ namespace MINEASMALM {
     bool WpnStatusCtrlManager::ProcessControlCommand(const CMSHCI_AIEP_WPN_CTRL_CMD& command) {
         if (!m_initialized.load()) {
             DEBUG_ERROR_STREAM(WEAPONSTATE) << "WpnStatusCtrlManager not initialized" << std::endl;
-            return false;
-        }
-
-        // 무장 종류 확인
-        if (static_cast<EN_WPN_KIND>(command.eWpnKind()) != m_weaponKind) {
-            DEBUG_ERROR_STREAM(WEAPONSTATE) << "Weapon kind mismatch. Expected: "
-                << static_cast<int>(m_weaponKind)
-                << ", Received: " << command.eWpnKind() << std::endl;
             return false;
         }
 
@@ -121,7 +116,6 @@ namespace MINEASMALM {
 
         return it->second.find(toState) != it->second.end();
     }
-
 
     // LaunchTubeManager가 교전계획 준비 상태 체크 함수를 주입
     void WpnStatusCtrlManager::SetEngagementPlanChecker(std::function<bool()> checker) {
@@ -169,8 +163,8 @@ namespace MINEASMALM {
                 return;
             }
             m_currentState.store(targetState);
-        }      
-        
+        }
+
         // 무장 켬 후 경과 시간 저장
         if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON)
         {
@@ -198,6 +192,7 @@ namespace MINEASMALM {
         else {
             // 일반 상태 전이
         }
+
     }
 
     void WpnStatusCtrlManager::ChangeWeaponState(EN_WPN_CTRL_STATE newState) {
@@ -224,7 +219,8 @@ namespace MINEASMALM {
                 bool planReady = false;
                 {
                     std::lock_guard<std::mutex> lock(m_callbackMutex);
-                    if (m_isEngagementPlanReady) {
+                    if (m_isEngagementPlanReady) 
+                    {
                         planReady = m_isEngagementPlanReady();
                     }
                 }
@@ -244,6 +240,39 @@ namespace MINEASMALM {
             }).detach();
     }
 
+    void WpnStatusCtrlManager::SendWeaponStatus() {
+        if (!m_ddsComm || m_shutdown.load()) {
+            return;
+        }
+
+        try {
+            AIEP_WPN_CTRL_STATUS_INFO statusMsg;
+
+            // 기본 정보 설정
+            statusMsg.eTubeNum() = static_cast<uint32_t>(m_tubeNumber);
+            statusMsg.eCtrlState() = static_cast<uint32_t>(m_currentState.load());
+
+            // 무장 켠 후 경과시간 계산
+            if (m_isWeaponOn.load()) {
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - m_weaponOnTime);
+                statusMsg.wpnTime() = static_cast<uint32_t>(elapsed.count());
+            }
+            else {
+                statusMsg.wpnTime() = 0;
+            }
+
+            // DDS로 메시지 전송
+            m_ddsComm->Send(statusMsg);
+
+            DEBUG_STREAM(WEAPONSTATE) << "Weapon status sent for Tube " << m_tubeNumber
+                << ", State: " << static_cast<int>(m_currentState.load()) << std::endl;
+        }
+        catch (const std::exception& e) {
+            DEBUG_ERROR_STREAM(WEAPONSTATE) << "Failed to send weapon status: " << e.what() << std::endl;
+        }
+    }
+
     void WpnStatusCtrlManager::ProcessLaunchSequence() {
         try {
             // ConfigManager에서 무장 스펙 조회
@@ -252,13 +281,11 @@ namespace MINEASMALM {
 
             double launchDelay_sec = weaponSpec.launchDelay_sec;
 
-            DEBUG_STREAM(WEAPONSTATE) << "Starting launch sequence for Tube " << m_tubeNumber 
-                                      << ", Launch delay: " << launchDelay_sec << " seconds" << std::endl;
+            DEBUG_STREAM(WEAPONSTATE) << "Starting launch sequence for Tube " << m_tubeNumber
+                << ", Launch delay: " << launchDelay_sec << " seconds" << std::endl;
 
-            // 발사 지연시간만큼 대기
             auto startTime = std::chrono::steady_clock::now();
             auto delayDuration = std::chrono::duration<double>(launchDelay_sec);
-
 
             while (!m_shutdown.load() && !m_abortRequested.load()) 
             {
@@ -284,12 +311,12 @@ namespace MINEASMALM {
             {
                 std::lock_guard<std::mutex> lock(m_stateMutex);
                 m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_POST_LAUNCH);
+
                 m_launchInProgress.store(false);
 
                 DEBUG_STREAM(WEAPONSTATE) << "Launch sequence completed for Tube " << m_tubeNumber
                     << ", State transitioned to POST_LAUNCH" << std::endl;
             }
-            
             auto launchTime = std::chrono::steady_clock::now();
             // 콜백 함수로 발사 완료 알림
             {
@@ -306,34 +333,4 @@ namespace MINEASMALM {
             m_abortRequested.store(false);
         }
     }
-
-    void WpnStatusCtrlManager::SendWeaponStatus() {
-        if (!m_ddsComm || m_shutdown.load()) {
-            return;
-        }
-    
-        try {
-            AIEP_WPN_CTRL_STATUS_INFO statusMsg;
-            
-            statusMsg.eTubeNum() = static_cast<uint32_t>(m_tubeNumber);
-            statusMsg.eCtrlState() = static_cast<uint32_t>(m_currentState.load());
-            
-            // 무장 켠 후 경과시간 계산
-            if (m_isWeaponOn.load()) {
-                auto now = std::chrono::steady_clock::now();
-                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - m_weaponOnTime);
-                statusMsg.wpnTime() = static_cast<uint32_t>(elapsed.count());
-            } else {
-                statusMsg.wpnTime() = 0;
-            }
-            
-            m_ddsComm->Send(statusMsg);
-            
-            DEBUG_STREAM(WEAPONSTATE) << "Weapon status sent for Tube " << m_tubeNumber 
-                                      << ", State: " << static_cast<int>(m_currentState.load()) << std::endl;
-        }
-        catch (const std::exception& e) {
-            DEBUG_ERROR_STREAM(WEAPONSTATE) << "Failed to send weapon status: " << e.what() << std::endl;
-        }
-    }
-} // namespace MINEASMALM
+} // namespace AIEP
