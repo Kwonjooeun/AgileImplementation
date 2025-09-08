@@ -1,20 +1,22 @@
 #include "EngagementManagerBase.h"
+#include "utils/AIEP_DataConverter.h"
 #include <cstring>
 
-namespace MINEASMALM {
+namespace AIEP {
     // =============================================================================
     // EngagementManagerBase 구현
     // =============================================================================
 
-    EngagementManagerBase::EngagementManagerBase(WeaponAssignmentInfo weaponAssignInfo, std::shared_ptr<DdsComm> ddsComm)
-        : m_tubeNumber(weaponAssignInfo.tubeNumber)
-        , m_weaponKind(weaponAssignInfo.weaponKind)
+    EngagementManagerBase::EngagementManagerBase(ST_WA_SESSION weaponAssignInfo, std::shared_ptr<AIEP::DdsComm> ddsComm)
+        : m_tubeNumber(weaponAssignInfo.enTubeNum())
+        , m_weaponKind(weaponAssignInfo.enWeaponType())
         , m_ddsComm(ddsComm)
+        , m_weaponAssignmentInfo(weaponAssignInfo)
     {
         // 초기화
         memset(&m_ownShipInfo, 0, sizeof(m_ownShipInfo));
         memset(&m_targetInfo, 0, sizeof(m_targetInfo));
-        memset(&m_waypoints, 0, sizeof(m_waypoints));
+        memset(&m_waypointCmd, 0, sizeof(m_waypointCmd));
 
         m_shutdown.store(false);
         m_initialized.store(true);
@@ -22,7 +24,7 @@ namespace MINEASMALM {
         WeaponSpecInitialization();
 
         DEBUG_STREAM(ENGAGEMENT) << "EngagementManagerBase created for Tube " << m_tubeNumber
-            << ", Weapon: " << static_cast<int>(m_weaponKind) << std::endl;
+            << ", Weapon: " << m_weaponKind << std::endl;
     }
 
     EngagementManagerBase::~EngagementManagerBase() {
@@ -49,6 +51,11 @@ namespace MINEASMALM {
         m_shutdown.store(true);
 
         m_initialized.store(false);
+        
+        if (m_engagementPlanThread.joinable()) {
+            m_engagementPlanThread.join();
+        }
+
     }
 
     void EngagementManagerBase::Reset() {
@@ -59,9 +66,14 @@ namespace MINEASMALM {
 
         memset(&m_ownShipInfo, 0, sizeof(m_ownShipInfo));
         memset(&m_targetInfo, 0, sizeof(m_targetInfo));
-        memset(&m_waypoints, 0, sizeof(m_waypoints));
+        memset(&m_waypointCmd, 0, sizeof(m_waypointCmd));
 
         DEBUG_STREAM(ENGAGEMENT) << "EngagementManagerBase reset for Tube " << m_tubeNumber << std::endl;
+    }
+
+    void EngagementManagerBase::StartEngagementPlanManager()
+    {
+        m_engagementPlanThread = std::thread([this]() {WorkerLoop();});
     }
 
     void EngagementManagerBase::WorkerLoop() {
@@ -72,11 +84,11 @@ namespace MINEASMALM {
 
         while (!m_shutdown.load()) {
             auto now = std::chrono::steady_clock::now();
-
+            // TODO. timer 개선해야 함
             // 1초마다 결과 송신
             if (now - lastResultSend >= std::chrono::seconds(1)) {
-                UpdateEngagementResult();
-                SendEngagementResult();
+                UpdateEngagementPlanResult();
+                SendEngagementPlanResult();
                 lastResultSend = now;
             }
 
@@ -86,45 +98,74 @@ namespace MINEASMALM {
         DEBUG_STREAM(ENGAGEMENT) << "EngagementManager WorkerLoop ended for Tube " << m_tubeNumber << std::endl;
     }
 
-    // LaunchTubeManager에서 직접 호출
     void EngagementManagerBase::UpdateOwnShipInfo(const NAVINF_SHIP_NAVIGATION_INFO& ownShip) {
-        std::lock_guard<std::mutex> lock(m_dataMutex);
-        m_ownShipInfo = ownShip;
-
+        {
+            std::lock_guard<std::mutex> lock(m_dataMutex);
+            m_ownShipInfo = ownShip;
+        }
+        IsInValidLaunchGeometry();
         DEBUG_STREAM(ENGAGEMENT) << "Tube " << m_tubeNumber << " ownship info updated" << std::endl;
-
-        // 자함 정보가 업데이트되면 교전계획 재계산 (WorkerLoop에서 자동 처리됨)
     }
 
-    // LaunchTubeManager에서 직접 호출
-    void EngagementManagerBase::UpdateTargetInfo(const TRKMGR_SYSTEMTARGET_INFO& target) {
-        std::lock_guard<std::mutex> lock(m_dataMutex);
-        m_targetInfo = target;
-
-        DEBUG_STREAM(ENGAGEMENT) << "Tube " << m_tubeNumber << " target info updated" << std::endl;
+    void EngagementManagerBase::UpdateSystemTargetInfo(const TRKMGR_SYSTEMTARGET_INFO& target) {
+        {
+            std::lock_guard<std::mutex> lock(m_dataMutex);
+            m_targetInfo = target;
+        }
+        DEBUG_STREAM(ENGAGEMENT) << "Tube " << m_tubeNumber << " system target info updated" << std::endl;
     }
 
-    // LaunchTubeManager에서 직접 호출
+    void EngagementManagerBase::UpdatePAInfo(const CMSHCI_AIEP_PA_INFO& paInfo) {
+        {
+            std::lock_guard<std::mutex> lock(m_dataMutex);
+            m_paInfo = paInfo;
+        }
+        DEBUG_STREAM(ENGAGEMENT) << "Tube " << m_tubeNumber << " PA info updated" << std::endl;
+    }
+
     void EngagementManagerBase::UpdateWaypoints(const CMSHCI_AIEP_WPN_GEO_WAYPOINTS& waypoints) {
-        std::lock_guard<std::mutex> lock(m_dataMutex);
-        m_waypoints = waypoints;
+        {
+            std::lock_guard<std::mutex> lock(m_dataMutex);
+            m_waypointCmd = waypoints;
+        }
+        SetWaypoints();
 
         DEBUG_STREAM(ENGAGEMENT) << "Tube " << m_tubeNumber << " waypoints updated" << std::endl;
     }
 
-    void EngagementManagerBase::WeaponLaunched(std::chrono::steady_clock::time_point launchTime) {
+    bool EngagementManagerBase::UpdateWeaponAssignmentInformation(const ST_WA_SESSION weaponAssignInfo)
+    {
+        if (IsValidAssignmentInfo(weaponAssignInfo)) // 유효한 할당 정보인가?
+        {
+            if (IsAssignmentInfoChanged(weaponAssignInfo)) // 기존 할당 정보와 다른가?
+            {
+                ApplyWeaponAssignmentInformation(weaponAssignInfo);
+                m_weaponAssignmentInfo = weaponAssignInfo;
+                return true;
+            }
+        }
 
-        m_isLaunched.store(true);
-        m_launchTime = launchTime;
-
-        DEBUG_STREAM(ENGAGEMENT) << "Tube " << m_tubeNumber << " weapon launched - switching to post-launch mode" << std::endl;
+        return false;
     }
 
-    ST_3D_GEODETIC_POSITION EngagementManagerBase::GetCurrentPosition(float timeSinceLaunch) const {
-        ST_3D_GEODETIC_POSITION pos;
-        memset(&pos, 0, sizeof(pos));
+    void EngagementManagerBase::RequestAIWaypointInference(const CMSHCI_AIEP_AI_WAYPOINTS_INFERENCE_REQ& AIWPInferReq)
+    {
+        AIEP_INTERNAL_INFER_REQ msg;
+        SetAIWaypointInferenceRequestMessage(msg);
+        m_ddsComm->Send(msg);
+    }
 
-        // 기본 구현 (하위 클래스에서 오버라이드)
-        return pos;
+    void EngagementManagerBase::ProcessAIInferredWaypoints(const AIEP_INTERNAL_INFER_RESULT_WP& AIWPInferReq)
+    {
+        AIEP_AI_INFER_RESULT_WP msg;        
+        ConvertAIWaypointsToGeodetic(AIWPInferReq, msg);
+        m_ddsComm->Send(msg);
+    }
+
+    void EngagementManagerBase::WeaponLaunched(std::chrono::steady_clock::time_point launchTime) {
+        m_isLaunched.store(true);
+        m_launchTime = launchTime;
+        EngagementPlanInitializationAfterLaunch();
+        DEBUG_STREAM(ENGAGEMENT) << "Tube " << m_tubeNumber << " weapon launched - switching to post-launch mode" << std::endl;
     }
 } // namespace AIEP
