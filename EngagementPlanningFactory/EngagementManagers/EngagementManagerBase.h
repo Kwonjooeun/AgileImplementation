@@ -71,20 +71,20 @@ namespace AIEP {
         virtual bool IsAssignmentInfoChanged(const ST_WA_SESSION& weaponAssignInfo) = 0;
         virtual void ApplyWeaponAssignmentInformation(const ST_WA_SESSION weaponAssignInfo) = 0;
 
-        // 할당 정보
-        ST_WA_SESSION m_weaponAssignmentInfo;
-
         // 멤버 변수
+        int m_tubeNumber;
+        uint32_t m_weaponKind;
         std::shared_ptr<AIEP::DdsComm> m_ddsComm;
-
         std::atomic<bool> m_initialized{ false };
+        std::atomic<bool> m_shutdown{ false };
         std::atomic<bool> m_isLaunched{ false };
         std::atomic<bool> m_engagementPlanReady{ false };
         std::thread m_engagementPlanThread;
-        int m_tubeNumber;
-        uint32_t m_weaponKind;
-        std::atomic<bool> m_shutdown{ false };
+
         WeaponSpecification m_weaponSpec;
+
+        // 할당 정보
+        ST_WA_SESSION m_weaponAssignmentInfo;
 
         // 발사 시간
         std::chrono::steady_clock::time_point m_launchTime;
