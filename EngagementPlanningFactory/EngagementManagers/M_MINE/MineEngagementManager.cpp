@@ -11,16 +11,27 @@ namespace AIEP {
     // =============================================================================
 
     MineEngagementManager::MineEngagementManager(ST_WA_SESSION weaponAssignInfo,
-        std::shared_ptr<AIEP::DdsComm> ddsComm) :
-        EngagementManagerBase(weaponAssignInfo, ddsComm),
-        m_MineModel(std::make_unique<M_MINE_Model>())
+        std::shared_ptr<AIEP::DdsComm> ddsComm)
+        : EngagementManagerBase{ weaponAssignInfo, ddsComm }
+        , m_MineModel{ std::make_unique<M_MINE_Model>() }
+        , m_dropPlan{}
+        , m_dropPlanLoaded{ false }
+        , m_dropPlanValid{ false }
+        , m_Geowaypoints{}
+        , LaunchPos_Geo{}
+        , TargetPos_Geo{}
     {
-        memset(&m_dropPlan, 0, sizeof(m_dropPlan));
+        int planListNum = weaponAssignInfo.usAllocDroppingPlanListNum();
+        int planNum = weaponAssignInfo.usAllocLayNum();
 
-        m_dropPlanListNumber = weaponAssignInfo.usAllocDroppingPlanListNum()-1;
-        m_dropPlanNumber = weaponAssignInfo.usAllocLayNum()-1;
+        if (planListNum == 0 || planNum == 0) {
+            throw std::invalid_argument("Plan list number and plan number must be greater than 0");
+        }
 
-        if (!LoadMineDropPlan(m_dropPlanListNumber, m_dropPlanNumber)) // m_dropPlan 
+        m_dropPlanListNumber = planListNum - 1;
+        m_dropPlanNumber = planNum - 1;
+
+        if (!LoadMineDropPlan(m_dropPlanListNumber, m_dropPlanNumber)) // m_dropPlan loading
         {
             throw std::runtime_error("Fail to initialize drop plan and dynamics model of M_MINE.");
         }
