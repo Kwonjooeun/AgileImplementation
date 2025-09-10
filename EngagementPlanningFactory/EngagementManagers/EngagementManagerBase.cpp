@@ -11,17 +11,15 @@ namespace AIEP {
         : m_tubeNumber(weaponAssignInfo.enTubeNum())
         , m_weaponKind(weaponAssignInfo.enWeaponType())
         , m_ddsComm(ddsComm)
+        , m_weaponSpec{}
         , m_weaponAssignmentInfo(weaponAssignInfo)
+        , m_ownShipInfo{}
+        , m_targetInfo{}
+        , m_paInfo{}
+        , m_waypointCmd{}
     {
-        // 초기화
-        memset(&m_ownShipInfo, 0, sizeof(m_ownShipInfo));
-        memset(&m_targetInfo, 0, sizeof(m_targetInfo));
-        memset(&m_waypointCmd, 0, sizeof(m_waypointCmd));
-
-        m_shutdown.store(false);
-        m_initialized.store(true);
-
         WeaponSpecInitialization();
+        m_initialized.store(true);
 
         DEBUG_STREAM(ENGAGEMENT) << "EngagementManagerBase created for Tube " << m_tubeNumber
             << ", Weapon: " << m_weaponKind << std::endl;
