@@ -44,7 +44,7 @@ namespace MINEASMALM {
         std::string description;
 
         WeaponSpecification()
-            : name("Unknown"), maxRange_km(0.0), maxSpeed_mps(0.0), cruiseSpeed_mps(0.0)
+            : name("Unknown"), maxRange_km(0.0), maxSpeed_mps(0.0), cruiseSpeed_mps(0.0), launchDelay_sec(3.0)
             , launchDelay_sec(0.0), maxDepth_m(0.0), maxAltitude_m(0.0)
             , maxWaypoints(0), requiresWaypoints(false), description("") {}
     };
