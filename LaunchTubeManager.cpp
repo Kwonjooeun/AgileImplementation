@@ -6,19 +6,18 @@ namespace AIEP {
     LaunchTubeManager::LaunchTubeManager(int tubeNumber, std::shared_ptr<AIEP::DdsComm> ddsComm)
         : m_tubeNumber(tubeNumber)
         , m_ddsComm(ddsComm)
+        , m_assignmentInfo{}
         , m_initialized(false)
         , m_isAssigned(false)
         , m_weaponKind(static_cast<uint32_t>(EN_WPN_KIND::WPN_KIND_NA))
         , m_wpnStatusCtrlManager(nullptr)
+        , m_ownShipInfo{}
         , m_shutdown(false)
     {
-        if (!ddsComm) {
+        if (!ddsComm) [[unlikely]]
+        {
             throw std::invalid_argument("DdsComm cannot be null");
         }
-
-        // 할당 정보 초기화
-        memset(&m_assignmentInfo, 0, sizeof(m_assignmentInfo));
-        memset(&m_ownShipInfo, 0, sizeof(m_ownShipInfo));
 
         Initialize();
     }
