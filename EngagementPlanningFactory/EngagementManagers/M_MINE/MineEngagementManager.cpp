@@ -65,6 +65,8 @@ namespace AIEP {
             Latitude = m_ownShipInfo.stShipMovementInfo().dShipLatitude();
             Longitude = m_ownShipInfo.stShipMovementInfo().dShipLongitude();
             Altitude = -m_ownShipInfo.stUnderwaterEnvironmentInfo().fDivingDepth();
+            
+            m_MineEngagementPlanResult_ENU.launchPos = center;
         }
 
         DataConverter::convertLatLonAltToLocal(center, Latitude, Longitude, Altitude, OwnshipPos_ENU);
@@ -118,9 +120,16 @@ namespace AIEP {
             {
                 std::lock_guard<std::mutex> lock(m_dataMutex);
 
-                center.latitude = m_ownShipInfo.stShipMovementInfo().dShipLatitude();
-                center.longitude = m_ownShipInfo.stShipMovementInfo().dShipLongitude();
-
+                if (m_isLaunched)
+                {
+                    center = m_MineEngagementPlanResult_ENU.launchPos;
+                }
+                else
+                {
+                    center.latitude = m_ownShipInfo.stShipMovementInfo().dShipLatitude();
+                    center.longitude = m_ownShipInfo.stShipMovementInfo().dShipLongitude();
+                }
+                
                 result.enTubeNum() = static_cast<uint32_t>(m_tubeNumber);
                 result.unCntWaypoint() = (unsigned short)m_Geowaypoints.size();
 
@@ -596,7 +605,7 @@ namespace AIEP {
     void MineEngagementManager::ApplyWeaponAssignmentInformation(const ST_WA_SESSION weaponAssignInfo)
     {
         {
-                        std::lock_guard<std::mutex> lock(m_planMutex);
+            std::lock_guard<std::mutex> lock(m_planMutex);
             m_dropPlanListNumber = weaponAssignInfo.usAllocDroppingPlanListNum();
             m_dropPlanNumber = weaponAssignInfo.usAllocLayNum();
         }
@@ -673,7 +682,7 @@ namespace AIEP {
 
     void MineEngagementManager::SetTarget(const double& Latitude, const double& Longitude, const float& Altitude)
     {
-                std::lock_guard<std::mutex> lock(m_dataMutex);
+        std::lock_guard<std::mutex> lock(m_dataMutex);
         TargetPos_Geo.dblLatitude() = Latitude;
         TargetPos_Geo.dblLongitude() = Longitude;
         TargetPos_Geo.fAltitude() = Altitude;
