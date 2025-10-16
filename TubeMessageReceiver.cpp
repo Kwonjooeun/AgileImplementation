@@ -49,14 +49,14 @@ namespace AIEP {
             m_ddsComm->RegisterReader<NAVINF_SHIP_NAVIGATION_INFO>(
                 [this](const NAVINF_SHIP_NAVIGATION_INFO& msg) { OnOwnShipInfoReceived(msg); });
 
-            m_ddsComm->RegisterReader<AIEP_WPN_CTRL_STATUS_INFO>(
-                [this](const AIEP_WPN_CTRL_STATUS_INFO& msg) { OnTargetInfoReceived(msg); });
-
             m_ddsComm->RegisterReader<CMSHCI_AIEP_AI_WAYPOINTS_INFERENCE_REQ>(
                 [this](const CMSHCI_AIEP_AI_WAYPOINTS_INFERENCE_REQ& msg) { OnAIWaypointsInferenceRequestReceived(msg); });
 
             m_ddsComm->RegisterReader<AIEP_INTERNAL_INFER_RESULT_WP>(
                 [this](const AIEP_INTERNAL_INFER_RESULT_WP& msg) { OnAIWaypointsInferenceResultReceived(msg); });
+
+           m_ddsComm->RegisterReader<TRKMGR_SYSTEMTARGET_INFO>(
+                [this](const TRKMGR_SYSTEMTARGET_INFO& msg) { OnSystemTargetInfoReceived(msg); });
 
             //m_ddsComm->RegisterReader<CMSHCI_AIEP_M_MINE_EDITED_PLAN_LIST>(
             //    [this](const CMSHCI_AIEP_M_MINE_EDITED_PLAN_LIST& msg) { OnEditedPlanListReceived(msg); });
@@ -121,7 +121,7 @@ namespace AIEP {
                     AIEP_ASSIGN_RESP RespMsg;
                     RespMsg.eSetCmd() = static_cast<uint32_t>(EN_SET_CMD::SET_CMD_SET);
                     RespMsg.stWpnAssign() = message.stWpnAssign();
-
+                    RespMsg.stMsgHeader().eTopicID() = static_cast<int32_t>(EN_TOPIC_ID::TOPIC_ID_AIEP_ASSIGN_RESP);
                     m_ddsComm->Send(RespMsg);
                     DEBUG_STREAM(MESSAGERECEIVER) << "Sucessfully Sent: AIEP_ASSIGN_RESP - SET" << std::endl;
                 }
@@ -129,6 +129,7 @@ namespace AIEP {
                 {
                     AIEP_ASSIGN_RESP RespMsg;
                     RespMsg.eSetCmd() = static_cast<uint32_t>(EN_SET_CMD::SET_CMD_REJECTED);
+                    RespMsg.stMsgHeader().eTopicID() = static_cast<int32_t>(EN_TOPIC_ID::TOPIC_ID_AIEP_ASSIGN_RESP);
                     RespMsg.stWpnAssign() = message.stWpnAssign();
 
                     m_ddsComm->Send(RespMsg);
@@ -140,6 +141,7 @@ namespace AIEP {
                 if (success) {
                     AIEP_ASSIGN_RESP RespMsg;
                     RespMsg.eSetCmd() = static_cast<uint32_t>(EN_SET_CMD::SET_CMD_UNSET);
+                    RespMsg.stMsgHeader().eTopicID() = static_cast<int32_t>(EN_TOPIC_ID::TOPIC_ID_AIEP_ASSIGN_RESP);
                     RespMsg.stWpnAssign() = message.stWpnAssign();
 
                     m_ddsComm->Send(RespMsg);
@@ -150,7 +152,7 @@ namespace AIEP {
                     AIEP_ASSIGN_RESP RespMsg;
                     RespMsg.eSetCmd() = static_cast<uint32_t>(EN_SET_CMD::SET_CMD_REJECTED);
                     RespMsg.stWpnAssign() = message.stWpnAssign();
-
+                    RespMsg.stMsgHeader().eTopicID() = static_cast<int32_t>(EN_TOPIC_ID::TOPIC_ID_AIEP_ASSIGN_RESP);
                     m_ddsComm->Send(RespMsg);
                     DEBUG_ERROR_STREAM(MESSAGERECEIVER) << "Rejected to unassign weapon" << std::endl;
                 }
@@ -194,12 +196,6 @@ namespace AIEP {
         m_launchtubemanager->ProcessOwnshipInfo(message);
     }
 
-    void TubeMessageReceiver::OnTargetInfoReceived(const AIEP_WPN_CTRL_STATUS_INFO& message)
-    {
-        int a = 0;
-        //m_launchtubemanager->ProcessSystemTargetInfo(message);
-    }
-
     void TubeMessageReceiver::OnAIWaypointsInferenceRequestReceived(const CMSHCI_AIEP_AI_WAYPOINTS_INFERENCE_REQ& message)
     {
         int targetTube = static_cast<int>(message.eTubeNum());
@@ -219,5 +215,10 @@ namespace AIEP {
             return;
         }
         m_launchtubemanager->ProcessAIWaypointsInferenceResult(message);
+    }
+
+    void TubeMessageReceiver::OnSystemTargetInfoReceived(const TRKMGR_SYSTEMTARGET_INFO& message)
+    {
+        m_launchtubemanager->ProcessSystemTargetInfo(message);
     }
 } // namespace AIEP
