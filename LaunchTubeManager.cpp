@@ -27,8 +27,6 @@ namespace AIEP {
     }
 
     bool LaunchTubeManager::Initialize() {
-        std::lock_guard<std::mutex> lock(m_mutex);
-
         if (m_initialized.load()) {
             return true;
         }
@@ -65,18 +63,7 @@ namespace AIEP {
         if (m_isAssigned) {
             UnassignWeapon();
         }
-
-        // 무장 상태 통제 관리자 종료
-        if (m_wpnStatusCtrlManager) {
-            m_wpnStatusCtrlManager->Shutdown();
-            m_wpnStatusCtrlManager.reset();
-        }
-
-        if (m_engagementManager) {
-            m_engagementManager->Shutdown();
-            m_engagementManager.reset();
-        }
-
+        
         m_initialized.store(false);
         DEBUG_STREAM(LAUNCHTUBEMANAGER) << "LaunchTubeManager " << m_tubeNumber << " shutdown completed" << std::endl;
     }
@@ -151,6 +138,7 @@ namespace AIEP {
                     && m_wpnStatusCtrlManager->GetCurrentState() != EN_WPN_CTRL_STATE::WPN_CTRL_STATE_POST_LAUNCH)
                 {
                     ST_WA_SESSION AssignInfo;
+                    AssignInfo = assignCmd.stWpnAssign();
 
                     if (m_engagementManager->UpdateWeaponAssignmentInformation(AssignInfo))
                     {
