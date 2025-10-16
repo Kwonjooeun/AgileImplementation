@@ -29,10 +29,7 @@ int main() {
     int tubeNumber = 1;//std::atoi(argv[1]);
 
     DebugLogger::Initialize(tubeNumber);
-    //// 로그 초기화
-    //if (sysInfra.enableDebugMode) {
-    //    DebugLogger::Initialize(tubeNumber, "debug.log");
-    //}
+
     //if (argc != 2) {
     //    std::cerr << "Usage: LaunchTubeProcess.exe <tube_number>" << std::endl;
     //    std::cerr << "Example: LaunchTubeProcess.exe 1" << std::endl;
@@ -70,7 +67,9 @@ int main() {
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
         DEBUG_STREAM(MAIN) << "Shutting down systems..." << std::endl;
-
+        
+        ddsComm->Stop();
+        
         // 정리 작업
         if (g_messagereceiver) {
             g_messagereceiver->Shutdown();
@@ -82,7 +81,6 @@ int main() {
             g_launchTubemanager.reset();
         }
 
-        ddsComm->Stop();
         DEBUG_STREAM(MAIN) << "Shutdown completed for Tube " << tubeNumber << std::endl;
         DebugLogger::Shutdown();
     }
