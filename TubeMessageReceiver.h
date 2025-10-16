@@ -30,9 +30,9 @@ namespace AIEP {
 		void OnWeaponControlCommandReceived(const CMSHCI_AIEP_WPN_CTRL_CMD& message);
 		void OnWaypointsReceived(const CMSHCI_AIEP_WPN_GEO_WAYPOINTS& message);
 		void OnOwnShipInfoReceived(const NAVINF_SHIP_NAVIGATION_INFO& message);
-		void OnTargetInfoReceived(const AIEP_WPN_CTRL_STATUS_INFO& message);
 		void OnAIWaypointsInferenceRequestReceived(const CMSHCI_AIEP_AI_WAYPOINTS_INFERENCE_REQ& message);
 		void OnAIWaypointsInferenceResultReceived(const AIEP_INTERNAL_INFER_RESULT_WP& message);
+		void OnSystemTargetInfoReceived(const TRKMGR_SYSTEMTARGET_INFO& message);
 
 		// 멤버 변수
 		int m_tubeNumber;
