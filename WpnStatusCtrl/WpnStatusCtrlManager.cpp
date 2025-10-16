@@ -8,7 +8,7 @@ namespace AIEP {
         WpnStatusCtrlManager::s_validTransitions = {
             {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON}},
             {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}},
-            {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_RTL, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH, EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}},
+            {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_RTL, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH, EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON, EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}},
             {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_LAUNCH, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT}},
             {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}},
             {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_POST_LAUNCH, {EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF}}
@@ -55,10 +55,8 @@ namespace AIEP {
 
         int waitCount{ 0 };
 
-        {
-            std::lock_guard<std::mutex> lock(m_stateMutex);
-            m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF);
-        }
+        m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_OFF);
+        
         // 콜백 함수들 정리
         {
             std::lock_guard<std::mutex> lock(m_callbackMutex);
@@ -144,26 +142,24 @@ namespace AIEP {
             m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT);
             return;
         }
-
-        {
-            std::lock_guard<std::mutex> lock(m_stateMutex);
-
-            EN_WPN_CTRL_STATE currentState = m_currentState.load();
-            // 동일 상태면 성공으로 처리
-            if (currentState == targetState) {
-                DEBUG_STREAM(WEAPONSTATE) << "Already in target state: " << static_cast<int>(targetState) << std::endl;
-                return;
-            }
-
-            // 상태 전이 유효성 검사
-            if (!IsValidTransition(currentState, targetState)) {
-                DEBUG_ERROR_STREAM(WEAPONSTATE) << "Invalid state transition: "
-                    << static_cast<int>(currentState)
-                    << " -> " << static_cast<int>(targetState) << std::endl;
-                return;
-            }
-            m_currentState.store(targetState);
+        
+        EN_WPN_CTRL_STATE currentState = m_currentState.load();
+        
+        // 동일 상태면 성공으로 처리
+        if (currentState == targetState) {
+            DEBUG_STREAM(WEAPONSTATE) << "Already in target state: " << static_cast<int>(targetState) << std::endl;
+            return;
         }
+
+        // 상태 전이 유효성 검사
+        if (!IsValidTransition(currentState, targetState)) {
+            DEBUG_ERROR_STREAM(WEAPONSTATE) << "Invalid state transition: "
+                << static_cast<int>(currentState)
+                << " -> " << static_cast<int>(targetState) << std::endl;
+            return;
+        }
+        m_currentState.store(targetState);
+        
 
         // 무장 켬 후 경과 시간 저장
         if (targetState == EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ON)
