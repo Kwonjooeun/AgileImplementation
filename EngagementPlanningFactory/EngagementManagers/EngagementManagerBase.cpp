@@ -61,10 +61,10 @@ namespace AIEP {
 
         m_engagementPlanReady.store(false);
         m_isLaunched.store(false);
-
-        memset(&m_ownShipInfo, 0, sizeof(m_ownShipInfo));
-        memset(&m_targetInfo, 0, sizeof(m_targetInfo));
-        memset(&m_waypointCmd, 0, sizeof(m_waypointCmd));
+        m_ownShipInfo = NAVINF_SHIP_NAVIGATION_INFO{};
+        m_targetInfo = TRKMGR_SYSTEMTARGET_INFO{};
+        m_paInfo = CMSHCI_AIEP_PA_INFO{};
+        m_waypointCmd = CMSHCI_AIEP_WPN_GEO_WAYPOINTS{};
 
         DEBUG_STREAM(ENGAGEMENT) << "EngagementManagerBase reset for Tube " << m_tubeNumber << std::endl;
     }
