@@ -138,7 +138,6 @@ namespace AIEP {
         {
             m_abortRequested.store(true);  // 발사 절차 중단 신호
             DEBUG_STREAM(WEAPONSTATE) << "ABORT " << std::endl;
-            std::lock_guard<std::mutex> lock(m_stateMutex);
             m_currentState.store(EN_WPN_CTRL_STATE::WPN_CTRL_STATE_ABORT);
             return;
         }
